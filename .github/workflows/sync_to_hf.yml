@@ -16,5 +16,11 @@ jobs:
       - name: Push to HF
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        run: git push --force https://token:$HF_TOKEN@huggingface.co/spaces/myarenaosx/openwa main
-
+        run: |
+          # إعداد وتتبع ملفات الصور والملفات الثنائية لمنع رفض الرفع
+          git lfs install
+          git lfs track "*.png"
+          git lfs track "*.psd"
+          
+          # تنفيذ عملية الرفع المعتادة
+          git push --force https://token:$HF_TOKEN@huggingface.co/spaces/myarenaosx/openwa main
