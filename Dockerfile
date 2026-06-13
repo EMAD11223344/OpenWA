@@ -76,15 +76,19 @@ RUN mkdir -p /app/data && chown -R node:node /app
 # Run as node user (UID 1000) - Required for Hugging Face
 USER node
 
-# Set PORT env variable to bind application to 7860
+# إعدادات الشبكة والبيئة لفتح الاتصال أونلاين ومنع الـ Localhost Lock
+ENV NODE_ENV=production
 ENV PORT=7860
+ENV HOST=0.0.0.0
+ENV API_HOST=0.0.0.0
+ENV HOSTNAME=0.0.0.0
 
 # Expose port (Hugging Face Spaces expects 7860)
 EXPOSE 7860
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-    CMD node -e "require('http').get('http://localhost:' + (process.env.PORT || '7860') + '/api/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"
+    CMD node -e "require('http').get('http://127.0.0.1:' + (process.env.PORT || '7860') + '/api/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"
 
 # Start with dumb-init to handle signals properly
 ENTRYPOINT ["dumb-init", "--"]
