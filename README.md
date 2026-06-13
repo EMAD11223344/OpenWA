@@ -1,3 +1,12 @@
+---
+title: Openwaotp
+emoji: 💬
+colorFrom: blue
+colorTo: green
+sdk: docker
+app_port: 7860
+---
+
 <p align="center">
   <img src="docs/logo/openwa_logo.webp" alt="OpenWA Logo" width="200"/>
 </p>
