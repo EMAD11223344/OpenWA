@@ -66,13 +66,12 @@ COPY package*.json ./
 # Install production dependencies only
 RUN npm ci --omit=dev && npm cache clean --force
 
-# Copy built application and data from builder stage
+# Copy built application from builder stage
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/data ./data
 COPY --from=builder /app/dashboard/dist ./dashboard/dist
 
-# Ensure proper permissions for the node user
-RUN chown -R node:node /app
+# إنشاء فولدر الـ data تلقائياً وتوزيع الصلاحيات للمستخدم node
+RUN mkdir -p /app/data && chown -R node:node /app
 
 # Run as node user (UID 1000) - Required for Hugging Face
 USER node
