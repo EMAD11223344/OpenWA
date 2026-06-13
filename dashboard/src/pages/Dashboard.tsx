@@ -1,86 +1,158 @@
-import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Eye, EyeOff } from 'lucide-react';
-import './Login.css';
+import { MessageSquare, Send, Webhook, Activity, ArrowUpRight, ArrowDownRight, Loader2 } from 'lucide-react';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
+import { useSessionsQuery, useSessionStatsQuery, useWebhooksQuery, useStopSessionMutation } from '../hooks/queries';
+import { PageHeader } from '../components/PageHeader';
+import './Dashboard.css';
 
-interface LoginProps {
-  onLogin: (apiKey: string) => void;
-}
-
-export function Login({ onLogin }: LoginProps) {
+export function Dashboard() {
   const { t } = useTranslation();
-  const [apiKey, setApiKey] = useState('');
-  const [showKey, setShowKey] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
+  useDocumentTitle(t('dashboard.title'));
+  const navigate = useNavigate();
+  const { data: sessions = [], isLoading: loadingSessions, error: sessionsError } = useSessionsQuery();
+  const { data: stats } = useSessionStatsQuery();
+  const { data: webhooks = [] } = useWebhooksQuery();
+  const stopMutation = useStopSessionMutation();
+  const loading = loadingSessions;
+  const error = sessionsError instanceof Error
+    ? sessionsError.message
+    : sessionsError
+      ? t('dashboard.loadError')
+      : null;
+  const webhookCount = webhooks.length;
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!apiKey.trim()) {
-      setError(t('login.apiKeyRequired'));
-      return;
-    }
-    setIsLoading(true);
-    setError('');
-
+  const handleDisconnect = async (id: string) => {
     try {
-      const response = await fetch('/api/auth/validate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-API-Key': apiKey,
-        },
-      });
-
-      if (response.ok) {
-        onLogin(apiKey);
-      } else {
-        const errorData = await response.json().catch(() => ({}));
-        setError(errorData.message || t('login.invalidKey'));
-      }
-    } catch {
-      setError(t('login.connectionError'));
-    } finally {
-      setIsLoading(false);
+      await stopMutation.mutateAsync(id);
+    } catch (err) {
+      console.error('Failed to disconnect:', err);
     }
   };
 
+  const statsCards = [
+    {
+      label: t('dashboard.stats.activeSessions'),
+      value: stats?.active ?? 0,
+      icon: MessageSquare,
+      trend: `+${stats?.ready ?? 0}`,
+      trendUp: true,
+    },
+    { label: t('dashboard.stats.messagesToday'), value: '—', icon: Send, trend: '0', trendUp: null },
+    { label: t('dashboard.stats.webhooksConfigured'), value: webhookCount, icon: Webhook, trend: '0', trendUp: null },
+    { label: t('dashboard.stats.apiCalls'), value: '—', icon: Activity, trend: '0', trendUp: null },
+  ];
+
+  const formatLastActive = (date?: string) => {
+    if (!date) return t('common.never');
+    const diff = Date.now() - new Date(date).getTime();
+    if (diff < 60000) return t('common.justNow');
+    if (diff < 3600000) return t('common.minAgo', { count: Math.floor(diff / 60000) });
+    if (diff < 86400000) return t('common.hoursAgo', { count: Math.floor(diff / 3600000) });
+    return new Date(date).toLocaleDateString();
+  };
+
+  const formatStatus = (status: string) => t(`sessionStatus.${status}`, { defaultValue: status });
+
+  if (loading) {
+    return (
+      <div
+        className="dashboard"
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '400px' }}
+      >
+        <Loader2 className="animate-spin" size={32} />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="dashboard" style={{ padding: '2rem' }}>
+        <div style={{ background: '#FEE2E2', padding: '1rem', borderRadius: '8px', color: '#DC2626' }}>
+          {t('dashboard.errorPrefix', { message: error })}
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="login-container">
-      <div className="login-card">
-        <div className="login-logo">
-          <img src="/openwa_logo.webp" alt="OpenWA" className="logo-icon" />
-          <span className="version-info">
-            {t('login.version', {
-              version: __APP_VERSION__,
-              date: new Date(__BUILD_TIME__).toLocaleDateString(),
-            })}
+    <div className="dashboard">
+      <PageHeader
+        title={t('dashboard.title')}
+        subtitle={t('dashboard.subtitle')}
+        badge={
+          <span className={`status-badge ${stats && stats.ready > 0 ? 'connected' : 'disconnected'}`}>
+            {stats && stats.ready > 0 ? t('common.connected') : t('common.disconnected')}
+          </span>
+        }
+      />
+
+      <div className="stats-grid">
+        {statsCards.map(({ label, value, icon: Icon, trend, trendUp }) => (
+          <div key={label} className="stat-card">
+            <Icon className="stat-watermark" />
+            <div className="stat-header">
+              <span className="stat-label">{label}</span>
+              <Icon size={20} className="stat-icon" />
+            </div>
+            <div className="stat-value">{typeof value === 'number' ? value.toLocaleString() : value}</div>
+            {trend !== '0' && (
+              <div className={`stat-trend ${trendUp ? 'up' : 'down'}`}>
+                {trendUp ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
+                {trend}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <section className="sessions-section">
+        <div className="section-header">
+          <h2>{t('dashboard.sessionsOverview')}</h2>
+          <span className="section-subtitle">
+            {t('dashboard.showingSessions', { shown: sessions.length, total: stats?.total ?? 0 })}
           </span>
         </div>
-        <form onSubmit={handleSubmit} className="login-form">
-          <div className="input-group">
-            <label htmlFor="apiKey">{t('login.apiKey')}</label>
-            <div className="input-wrapper">
-              <input
-                id="apiKey"
-                type={showKey ? 'text' : 'password'}
-                value={apiKey}
-                onChange={e => setApiKey(e.target.value)}
-                placeholder={t('login.apiKeyPlaceholder')}
-                className={error ? 'error' : ''}
-              />
-              <button type="button" className="toggle-visibility" onClick={() => setShowKey(!showKey)}>
-                {showKey ? <EyeOff size={20} /> : <Eye size={20} />}
-              </button>
-            </div>
-            {error && <span className="error-message">{error}</span>}
-          </div>
 
-          <button type="submit" className="connect-btn" disabled={isLoading}>
-            {isLoading ? t('login.connecting') : t('login.connect')}
-          </button>
-        </form>
-      </div>
+        <div className="sessions-table">
+          <div className="table-header">
+            <span>{t('dashboard.columns.sessionId')}</span>
+            <span>{t('dashboard.columns.phone')}</span>
+            <span>{t('dashboard.columns.status')}</span>
+            <span>{t('dashboard.columns.lastActive')}</span>
+            <span>{t('dashboard.columns.actions')}</span>
+          </div>
+          {sessions.length === 0 ? (
+            <div className="table-row" style={{ justifyContent: 'center', color: 'var(--text-muted)' }}>
+              {t('dashboard.noSessions')}
+            </div>
+          ) : (
+            sessions.map(session => (
+              <div key={session.id} className="table-row">
+                <div className="session-info-cell">
+                  <span className="session-id">{session.id.substring(0, 12)}</span>
+                  <span className="session-name" title={session.name}>
+                    {session.name}
+                  </span>
+                </div>
+                <span className="phone">{session.phone || '—'}</span>
+                <span className={`status-pill ${session.status}`}>{formatStatus(session.status)}</span>
+                <span className="last-active">{formatLastActive(session.lastActive)}</span>
+                <div className="actions">
+                  <button className="btn-sm" onClick={() => navigate('/sessions')}>
+                    {t('dashboard.view')}
+                  </button>
+                  {['ready', 'initializing', 'connecting', 'qr_ready'].includes(session.status) && (
+                    <button className="btn-sm danger" onClick={() => handleDisconnect(session.id)}>
+                      {t('dashboard.disconnect')}
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </section>
     </div>
   );
 }
