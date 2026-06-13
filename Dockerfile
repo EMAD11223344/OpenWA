@@ -3,7 +3,6 @@
 
 # ===== Stage 1: Builder =====
 FROM node:22-slim AS builder
-
 WORKDIR /app
 
 # Install build dependencies
@@ -22,8 +21,11 @@ RUN npm ci
 # Copy source code
 COPY . .
 
-# Build the application
-RUN npm run build
+# Install dashboard dependencies
+RUN npm run dashboard:install
+
+# Build the application and dashboard
+RUN npm run build && npm run dashboard:build
 
 # ===== Stage 2: Production =====
 FROM node:22-slim AS production
@@ -55,9 +57,7 @@ RUN apt-get update && apt-get install -y \
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 
-# Create app user for security
-RUN groupadd -r openwa && useradd -r -g openwa openwa
-
+# Use the pre-existing node user (UID 1000) in node:slim base image
 WORKDIR /app
 
 # Copy package files
@@ -66,23 +66,26 @@ COPY package*.json ./
 # Install production dependencies only
 RUN npm ci --omit=dev && npm cache clean --force
 
-# Copy built application from builder stage
+# Copy built application and data from builder stage
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/data ./data
+COPY --from=builder /app/dashboard/dist ./dashboard/dist
 
-# Create data directories with proper permissions
-RUN mkdir -p ./data/sessions ./data/media && \
-    chown -R openwa:openwa /app
+# Ensure proper permissions for the node user
+RUN chown -R node:node /app
 
-# Note: Running as root to allow Docker socket access for orchestration
-# For production with stricter security, consider using a Docker socket proxy
-# USER openwa
+# Run as node user (UID 1000) - Required for Hugging Face
+USER node
 
-# Expose port
-EXPOSE 2785
+# Set PORT env variable to bind application to 7860
+ENV PORT=7860
+
+# Expose port (Hugging Face Spaces expects 7860)
+EXPOSE 7860
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-    CMD node -e "require('http').get('http://localhost:2785/api/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"
+    CMD node -e "require('http').get('http://localhost:' + (process.env.PORT || '7860') + '/api/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"
 
 # Start with dumb-init to handle signals properly
 ENTRYPOINT ["dumb-init", "--"]
