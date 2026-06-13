@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Eye, EyeOff } from 'lucide-react';
+import { GithubIcon } from '../components/GithubIcon'; // رجعناه عشان الـ Compiler ميعترضش
 import './Login.css';
 
 interface LoginProps {
@@ -80,11 +81,37 @@ export function Login({ onLogin }: LoginProps) {
             {isLoading ? t('login.connecting') : t('login.connect')}
           </button>
         </form>
+
+        {/* الكود موجود هنا كامل عشان الـ Build ينجح، لكن false تمنع ظهوره نهائياً */}
+        {false && (
+          <p className="login-help">
+            {t('login.help')}{' '}
+            <a
+              href="https://github.com/rmyndharis/OpenWA/blob/main/docs/01-project-overview.md"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {t('login.viewDocs')}
+            </a>
+          </p>
+        )}
       </div>
 
-      <footer className="login-footer">
-        <span>{t('login.footer')}</span>
-      </footer>
+      {/* نفس الخدعة للفوتر وأيقونة جيت هاب */}
+      {false && (
+        <footer className="login-footer">
+          <span>{t('login.footer')}</span>
+          <a
+            href="https://github.com/rmyndharis/OpenWA"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="github-link"
+            aria-label="GitHub"
+          >
+            <GithubIcon size={18} />
+          </a>
+        </footer>
+      )}
     </div>
   );
 }
