@@ -11,16 +11,16 @@ jobs:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
-          lfs: true
 
       - name: Push to HF
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          # إعداد وتتبع ملفات الصور والملفات الثنائية لمنع رفض الرفع
+          # تهيئة أداة الملفات الكبيرة
           git lfs install
-          git lfs track "*.png"
-          git lfs track "*.psd"
           
-          # تنفيذ عملية الرفع المعتادة
+          # تحويل الملفات القديمة والموجودة في الـ History برمجياً إلى ملفات LFS لكي يقبلها الخادم
+          git lfs migrate import --everything --include="*.png,*.psd"
+          
+          # الرفع القسري بعد إصلاح التاريخ
           git push --force https://token:$HF_TOKEN@huggingface.co/spaces/myarenaosx/openwa main
