@@ -17,7 +17,7 @@ export class AuthService implements OnModuleInit {
   constructor(
     @InjectRepository(ApiKey, 'main')
     private readonly apiKeyRepository: Repository<ApiKey>,
-  ) {}
+  ) { }
 
   async onModuleInit(): Promise<void> {
     // Seed a default API key if none exist
@@ -28,9 +28,9 @@ export class AuthService implements OnModuleInit {
     if (count === 0) {
       // Use env var if set, otherwise auto-generate predictable key in development, random key in production
       displayKey = process.env.API_MASTER_KEY
-        || (process.env.NODE_ENV === 'production' 
-          ? `owa_k1_${randomBytes(32).toString('hex')}` 
-          : 'dev-admin-key');
+        || (process.env.NODE_ENV === 'production'
+          ? `owa_k1_${randomBytes(32).toString('hex')}`
+          : 'owa_k1_0398076db26384bcb163979611d1f1bd8034fea090fbe67706e2d7dce8fdf6f9');
 
       await this.seedApiKey(displayKey, 'Default Admin Key', ApiKeyRole.ADMIN);
       isNewKey = true;
