@@ -268,3 +268,4 @@ export class AuthService implements OnModuleInit {
     return roleHierarchy[apiKey.role] >= roleHierarchy[requiredRole];
   }
 }
+
