@@ -288,18 +288,33 @@ export class WhatsAppWebJsAdapter extends EventEmitter implements IWhatsAppEngin
     return this.pushName;
   }
 
+  /**
+   * Resolve a chat id to a sendable JID. Incoming events now use LID
+   * identifiers (e.g. 123456@lid); sending to a raw @c.us phone fails with
+   * "No LID for user". If the id is a phone (@c.us) we ask WhatsApp for the
+   * real registered id (which may be a LID) before resolving the chat.
+   */
+  private async resolveChatId(chatId: string): Promise<string> {
+    if (chatId.endsWith('@lid') || chatId.endsWith('@g.us')) return chatId;
+    try {
+      const wid: any = await this.client!.getNumberId(chatId);
+      if (wid && wid._serialized) return wid._serialized;
+    } catch (err) {
+      this.logger.warn(`getNumberId failed for ${chatId}: ${String(err)}`);
+    }
+    return chatId;
+  }
+
   async sendTextMessage(chatId: string, text: string): Promise<MessageResult> {
     this.ensureReady();
-    // Resolve the chat first. Passing a raw JID string to sendMessage triggers
-    // the "No LID for user" failure on some sessions; resolving via getChatById
-    // normalizes the chat and avoids it. Also guards against an undefined return.
+    const resolved = await this.resolveChatId(chatId);
     let chat;
     try {
-      chat = await this.client!.getChatById(chatId);
+      chat = await this.client!.getChatById(resolved);
     } catch (err) {
-      this.logger.warn(`getChatById failed for ${chatId}, falling back to direct send: ${String(err)}`);
+      this.logger.warn(`getChatById failed for ${resolved}, falling back to direct send: ${String(err)}`);
     }
-    const msg = await (chat ? chat.sendMessage(text) : this.client!.sendMessage(chatId, text));
+    const msg = await (chat ? chat.sendMessage(text) : this.client!.sendMessage(resolved, text));
     if (!msg || !msg.id) {
       throw new Error('WhatsApp send returned no message id');
     }
@@ -343,15 +358,16 @@ export class WhatsAppWebJsAdapter extends EventEmitter implements IWhatsAppEngin
       messageMedia = new MessageMedia(media.mimetype, media.data.toString('base64'), media.filename);
     }
 
+    const resolved = await this.resolveChatId(chatId);
     let chat;
     try {
-      chat = await this.client!.getChatById(chatId);
+      chat = await this.client!.getChatById(resolved);
     } catch (err) {
-      this.logger.warn(`getChatById failed for ${chatId}, falling back to direct send: ${String(err)}`);
+      this.logger.warn(`getChatById failed for ${resolved}, falling back to direct send: ${String(err)}`);
     }
     const msg = await (chat
       ? chat.sendMessage(messageMedia, { caption: media.caption })
-      : this.client!.sendMessage(chatId, messageMedia, { caption: media.caption }));
+      : this.client!.sendMessage(resolved, messageMedia, { caption: media.caption }));
 
     if (!msg || !msg.id) {
       throw new Error('WhatsApp send returned no message id');
