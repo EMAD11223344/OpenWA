@@ -59,8 +59,12 @@ ENV DATABASE_SYNCHRONIZE=true
 
 WORKDIR /app
 
-# Copy production package files and install dependencies
+# Copy production package files and install dependencies.
+# NOTE: sqlite3 is a native module and needs build tools to compile during
+# install — without these, `npm ci` fails on node:22-slim and the Space build
+# errors out ("dashboard encountered an unexpected error").
 COPY package*.json ./
+RUN apt-get update && apt-get install -y python3 make g++ && rm -rf /var/lib/apt/lists/*
 RUN npm ci --omit=dev --legacy-peer-deps && npm cache clean --force
 
 # Copy built NestJS backend from backend-builder stage
