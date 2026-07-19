@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Eye, EyeOff } from 'lucide-react';
-import { GithubIcon } from '../components/GithubIcon'; // رجعناه عشان الـ Compiler ميعترضش
 import './Login.css';
 
 interface LoginProps {
