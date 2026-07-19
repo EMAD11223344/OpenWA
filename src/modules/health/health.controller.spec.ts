@@ -1,12 +1,19 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { HealthController } from './health.controller';
+import { DataSource } from 'typeorm';
 
 describe('HealthController', () => {
   let controller: HealthController;
 
   beforeEach(async () => {
+    const mockDataSource = {
+      isInitialized: true,
+      query: jest.fn().mockResolvedValue([{ '?column?': 1 }]),
+    } as unknown as DataSource;
+
     const module: TestingModule = await Test.createTestingModule({
       controllers: [HealthController],
+      providers: [{ provide: 'dataDataSource', useValue: mockDataSource }],
     }).compile();
 
     controller = module.get<HealthController>(HealthController);
@@ -30,8 +37,8 @@ describe('HealthController', () => {
   });
 
   describe('readiness', () => {
-    it('should return ok status for readiness probe', () => {
-      const result = controller.readiness();
+    it('should return ok status for readiness probe', async () => {
+      const result = await controller.readiness();
 
       expect(result.status).toBe('ok');
     });
