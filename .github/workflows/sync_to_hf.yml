@@ -18,10 +18,15 @@ jobs:
         run: |
           # تهيئة أداة الملفات الكبيرة
           git lfs install
-          
-          # تحويل الملفات القديمة والموجودة في الـ History برمجياً إلى ملفات LFS لكي يقبلها الخادم
-          # HF يرفض الملفات الثنائية في git العادي — يجب تخزينها عبر LFS (أو Xet).
+
+          # تنظيف شجرة العمل أولاً (تفادي خطأ "working copy must not be dirty"
+          # الذي يفشل أمر migrate)
+          git reset --hard HEAD
+          git clean -fd || true
+
+          # تحويل الملفات الثنائية في كل التاريخ إلى LFS كي يقبلها HF
+          # (يُرفَض الدفع إذا احتوى على ملفات ثنائية غير LFS).
           git lfs migrate import --everything --include="*.png,*.psd,*.webp,*.jpg,*.jpeg,*.gif,*.ico,*.woff,*.woff2,*.ttf,*.otf"
-          
-          # الرفع القسري بعد إصلاح التاريخ
+
+          # الرفع القسوري بعد إصلاح التاريخ
           git push --force https://token:$HF_TOKEN@huggingface.co/spaces/myarenaosx/openwa main
