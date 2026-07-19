@@ -20,7 +20,8 @@ jobs:
           git lfs install
           
           # تحويل الملفات القديمة والموجودة في الـ History برمجياً إلى ملفات LFS لكي يقبلها الخادم
-          git lfs migrate import --everything --include="*.png,*.psd"
+          # HF يرفض الملفات الثنائية في git العادي — يجب تخزينها عبر LFS (أو Xet).
+          git lfs migrate import --everything --include="*.png,*.psd,*.webp,*.jpg,*.jpeg,*.gif,*.ico,*.woff,*.woff2,*.ttf,*.otf"
           
           # الرفع القسري بعد إصلاح التاريخ
           git push --force https://token:$HF_TOKEN@huggingface.co/spaces/myarenaosx/openwa main
