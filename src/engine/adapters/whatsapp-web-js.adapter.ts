@@ -164,7 +164,7 @@ export class WhatsAppWebJsAdapter extends EventEmitter implements IWhatsAppEngin
         };
 
         // Handle location
-        if (msg.type === 'location' && msg.location) {
+        if (String(msg.type) === 'location' && msg.location) {
           incomingMessage.location = {
             latitude: Number(msg.location.latitude),
             longitude: Number(msg.location.longitude),

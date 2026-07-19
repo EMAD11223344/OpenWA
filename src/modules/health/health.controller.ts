@@ -55,11 +55,12 @@ export class HealthController {
           database: { status: 'up' },
         },
       };
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
       return {
         status: 'error',
         details: {
-          database: { status: 'down', error: err?.message || String(err) },
+          database: { status: 'down', error: message },
         },
       };
     }
