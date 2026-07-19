@@ -1,6 +1,8 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { Public } from '../auth/decorators/auth.decorators';
+import { InjectDataSource } from '@nestjs/typeorm';
+import { DataSource } from 'typeorm';
 
 interface HealthCheckResult {
   status: 'ok' | 'error';
@@ -13,6 +15,11 @@ interface HealthCheckResult {
 @Controller('health')
 @Public()
 export class HealthController {
+  constructor(
+    @InjectDataSource('data')
+    private readonly dataSource: DataSource,
+  ) {}
+
   @Get()
   @ApiOperation({ summary: 'Basic health check' })
   @ApiResponse({ status: 200, description: 'Application is healthy' })
@@ -31,18 +38,31 @@ export class HealthController {
   }
 
   @Get('ready')
-  @ApiOperation({ summary: 'Readiness probe for Kubernetes' })
-  @ApiResponse({
-    status: 200,
-    description: 'Application is ready to accept traffic',
-  })
-  readiness(): HealthCheckResult {
-    // In the future, check database connection, Redis, etc.
-    return {
-      status: 'ok',
-      details: {
-        database: { status: 'up' },
-      },
-    };
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Readiness probe — verifies the data database is reachable' })
+  @ApiResponse({ status: 200, description: 'Application is ready to accept traffic' })
+  @ApiResponse({ status: 503, description: 'Application is not ready (database unreachable)' })
+  async readiness(): Promise<HealthCheckResult> {
+    try {
+      if (!this.dataSource || !this.dataSource.isInitialized) {
+        throw new Error('data database not initialized');
+      }
+      // Run a trivial query to confirm the connection is live (SQLite/Postgres safe).
+      await this.dataSource.query('SELECT 1');
+      return {
+        status: 'ok',
+        details: {
+          database: { status: 'up' },
+        },
+      };
+    } catch (err: any) {
+      return {
+        status: 'error',
+        details: {
+          database: { status: 'down', error: err?.message || String(err) },
+        },
+      };
+    }
   }
 }
+

@@ -69,15 +69,23 @@ export class WhatsAppWebJsAdapter extends EventEmitter implements IWhatsAppEngin
     this.setStatus(EngineStatus.INITIALIZING);
 
     try {
-      // Build puppeteer args, including proxy if configured
+      // Build puppeteer args, including proxy if configured.
+      // Memory-safe defaults for constrained hosts (Hugging Face free tier):
+      // --single-process keeps memory lower (one Chromium process per session),
+      // --disable-dev-shm-usage avoids /dev/shm OOM, and the rest reduce footprint.
       const puppeteerArgs = this.config.puppeteer?.args || [
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
         '--disable-accelerated-2d-canvas',
+        '--disable-gpu',
         '--no-first-run',
         '--no-zygote',
-        '--disable-gpu',
+        '--single-process',
+        '--disable-extensions',
+        '--disable-infobars',
+        '--mute-audio',
+        '--disable-software-rasterizer',
       ];
 
       // Add proxy configuration if provided

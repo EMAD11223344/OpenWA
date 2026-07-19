@@ -47,14 +47,16 @@ export class SessionService implements OnModuleDestroy, OnModuleInit {
 
   /**
    * On backend startup, reset all active session statuses to disconnected
-   * because the engines are not running yet after restart
+   * because the engines are not running yet after restart. Then automatically
+   * re-start persisted sessions in the background so WhatsApp reconnects
+   * without waiting for a client to re-prime them. This closes the
+   * "silent disconnect" window after a Space/docker restart.
    */
   async onModuleInit(): Promise<void> {
     const activeStatuses = [
       SessionStatus.READY,
       SessionStatus.INITIALIZING,
       SessionStatus.QR_READY,
-      SessionStatus.AUTHENTICATING,
     ];
 
     const result = await this.sessionRepository.update(
@@ -67,6 +69,34 @@ export class SessionService implements OnModuleDestroy, OnModuleInit {
         action: 'startup_reset',
         affected: result.affected,
       });
+    }
+
+    // Re-connect persisted sessions shortly after boot (staggered to avoid
+    // launching every Chromium at once and OOM-ing the container).
+    void this.reconnectAllSessionsOnBoot();
+  }
+
+  private async reconnectAllSessionsOnBoot(): Promise<void> {
+    try {
+      const sessions = await this.sessionRepository.find();
+      if (!sessions.length) return;
+      this.logger.log(`Auto-reconnecting ${sessions.length} persisted session(s) on boot`, {
+        action: 'boot_reconnect',
+        count: sessions.length,
+      });
+      for (const session of sessions) {
+        // Stagger by 3s per session to spread Chromium launches.
+        setTimeout(() => {
+          this.start(session.id).catch((err) => {
+            this.logger.warn(`Auto-reconnect failed for session ${session.name}: ${(err as Error)?.message}`, {
+              action: 'boot_reconnect_failed',
+              sessionId: session.id,
+            });
+          });
+        }, 3000 * sessions.indexOf(session));
+      }
+    } catch (err) {
+      this.logger.error(`Boot reconnect error: ${(err as Error)?.message}`);
     }
   }
 
@@ -189,6 +219,15 @@ export class SessionService implements OnModuleDestroy, OnModuleInit {
 
     if (this.engines.has(id)) {
       throw new BadRequestException('Session is already started');
+    }
+
+    // Guard against launching too many Chromium instances at once (OOM risk on
+    // small hosts). MAX_CONCURRENT_SESSIONS can be overridden via env.
+    const maxConcurrent = parseInt(process.env.MAX_CONCURRENT_SESSIONS || '3', 10);
+    if (this.engines.size >= maxConcurrent) {
+      throw new BadRequestException(
+        `Maximum concurrent sessions (${maxConcurrent}) reached. Stop another session before starting a new one.`,
+      );
     }
 
     // Execute hook before starting

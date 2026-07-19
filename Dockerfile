@@ -48,6 +48,15 @@ ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PORT=2785
 
+# Resilience defaults for constrained hosts (Hugging Face free tier):
+# - production mode (avoids the dev hardcoded API key)
+# - cap concurrent Chromium sessions to avoid OOM
+# - sqlite auto-synchronize so the embedded DB just works
+ENV NODE_ENV=production
+ENV MAX_CONCURRENT_SESSIONS=3
+ENV DATABASE_TYPE=sqlite
+ENV DATABASE_SYNCHRONIZE=true
+
 WORKDIR /app
 
 # Copy production package files and install dependencies
@@ -66,10 +75,10 @@ COPY nginx.huggingface.conf /etc/nginx/conf.d/default.conf
 COPY start.huggingface.sh ./start.sh
 
 # Create required directories and set permissions
-RUN mkdir -p ./data/sessions ./data/media \
+RUN mkdir -p ./data ./data/sessions ./data/media \
     /var/cache/nginx /var/run /var/log/nginx /var/lib/nginx /usr/share/nginx/html && \
     chmod +x ./start.sh && \
-    chmod -R 777 /var/cache/nginx /var/run /var/log/nginx /var/lib/nginx /usr/share/nginx/html /app
+    chmod -R 777 ./data /var/cache/nginx /var/run /var/log/nginx /var/lib/nginx /usr/share/nginx/html /app
 
 # Expose Hugging Face default port
 EXPOSE 7860

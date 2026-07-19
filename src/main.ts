@@ -65,7 +65,8 @@ STORAGE_PATH=./data/media
 }
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  try {
+    const app = await NestFactory.create(AppModule);
 
   // Enable shutdown hooks for graceful shutdown
   app.enableShutdownHooks();
@@ -164,6 +165,12 @@ async function bootstrap() {
 
   console.log(`🚀 OpenWA is running on: http://localhost:${port}`);
   console.log(`📚 Swagger docs: http://localhost:${port}/api/docs`);
+  } catch (err) {
+    // Fatal bootstrap error — log loudly so the container restart loop
+    // (start.huggingface.sh) surfaces the real cause instead of a silent crash.
+    console.error('💥 OpenWA failed to start:', err);
+    process.exit(1);
+  }
 }
 
 void bootstrap();
