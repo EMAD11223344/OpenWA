@@ -25,18 +25,27 @@ export class AuthService implements OnModuleInit {
     let displayKey: string;
     let isNewKey = false;
 
-    if (count === 0) {
-      // Use env var if set, otherwise auto-generate a random key (never a
-      // hardcoded constant — the old dev fallback was leaked in the repo).
-      // The generated key is persisted to API_KEY_FILE so it stays stable
-      // across restarts.
-      displayKey = process.env.API_MASTER_KEY
-        || `owa_k1_${randomBytes(32).toString('hex')}`;
+    // API_MASTER_KEY is always authoritative when set — it overrides any
+    // previously seeded/generated key so operators can rotate the key by
+    // simply updating the env var (no need to wipe the persisted key file).
+    if (process.env.API_MASTER_KEY) {
+      displayKey = process.env.API_MASTER_KEY;
+      await this.seedApiKey(displayKey, 'Default Admin Key', ApiKeyRole.ADMIN);
+      isNewKey = true;
+
+      try {
+        writeFileSync(API_KEY_FILE, displayKey, 'utf-8');
+      } catch (err) {
+        this.logger.warn('Could not save API key file', { error: String(err) });
+      }
+    } else if (count === 0) {
+      // No env key and no existing keys: auto-generate a random key (never a
+      // hardcoded constant). Persisted to API_KEY_FILE for stability.
+      displayKey = `owa_k1_${randomBytes(32).toString('hex')}`;
 
       await this.seedApiKey(displayKey, 'Default Admin Key', ApiKeyRole.ADMIN);
       isNewKey = true;
 
-      // Save raw key to file for startup script to read
       try {
         writeFileSync(API_KEY_FILE, displayKey, 'utf-8');
       } catch (err) {
@@ -82,6 +91,17 @@ export class AuthService implements OnModuleInit {
   private async seedApiKey(rawKey: string, name: string, role: ApiKeyRole): Promise<ApiKey> {
     const keyHash = this.hashKey(rawKey);
     const keyPrefix = rawKey.substring(0, 12);
+
+    // Upsert on name so restarts with API_MASTER_KEY set don't create
+    // duplicate "Default Admin Key" rows.
+    const existing = await this.apiKeyRepository.findOne({ where: { name } });
+    if (existing) {
+      existing.keyHash = keyHash;
+      existing.keyPrefix = keyPrefix;
+      existing.role = role;
+      existing.isActive = true;
+      return this.apiKeyRepository.save(existing);
+    }
 
     const apiKey = this.apiKeyRepository.create({
       name,
