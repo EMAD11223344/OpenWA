@@ -156,7 +156,7 @@ export class WhatsAppWebJsAdapter extends EventEmitter implements IWhatsAppEngin
           from: msg.from,
           to: msg.to,
           chatId: msg.from,
-          body: msg.body,
+          body: msg.body || (msg as any)._data?.body || (msg as any).caption || '',
           type: msg.type,
           timestamp: msg.timestamp,
           fromMe: msg.fromMe,
@@ -315,13 +315,12 @@ export class WhatsAppWebJsAdapter extends EventEmitter implements IWhatsAppEngin
       this.logger.warn(`getChatById failed for ${resolved}, falling back to direct send: ${String(err)}`);
     }
     const msg = await (chat ? chat.sendMessage(text) : this.client!.sendMessage(resolved, text));
-    if (!msg || !msg.id) {
-      throw new Error('WhatsApp send returned no message id');
-    }
-    return {
-      id: msg.id._serialized,
-      timestamp: msg.timestamp,
-    };
+    // Some sessions (LID-based) deliver a sent message without a resolvable
+    // msg.id. The message was still sent — don't fail the request. Use a
+    // timestamp-based fallback id so the caller can persist it.
+    const id = msg && msg.id ? msg.id._serialized : `fallback-${Date.now()}`;
+    const timestamp = msg && msg.timestamp ? msg.timestamp : Math.floor(Date.now() / 1000);
+    return { id, timestamp };
   }
 
   async sendImageMessage(chatId: string, media: MediaInput): Promise<MessageResult> {
