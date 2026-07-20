@@ -150,13 +150,15 @@ export class WhatsAppWebJsAdapter extends EventEmitter implements IWhatsAppEngin
 
     // eslint-disable-next-line @typescript-eslint/no-misused-promises
     this.client.on('message', async msg => {
+      // whatsapp-web.js exposes extra fields loosely; view them through a safe shape.
+      const msgExtra = msg as unknown as { _data?: { body?: string }; caption?: string };
       try {
         const incomingMessage: IncomingMessage = {
           id: msg.id._serialized,
           from: msg.from,
           to: msg.to,
           chatId: msg.from,
-          body: msg.body || (msg as any)._data?.body || (msg as any).caption || '',
+          body: msg.body || msgExtra._data?.body || msgExtra.caption || '',
           type: msg.type,
           timestamp: msg.timestamp,
           fromMe: msg.fromMe,
@@ -297,7 +299,7 @@ export class WhatsAppWebJsAdapter extends EventEmitter implements IWhatsAppEngin
   private async resolveChatId(chatId: string): Promise<string> {
     if (chatId.endsWith('@lid') || chatId.endsWith('@g.us')) return chatId;
     try {
-      const wid: any = await this.client!.getNumberId(chatId);
+      const wid = (await this.client!.getNumberId(chatId)) as { _serialized?: string } | null;
       if (wid && wid._serialized) return wid._serialized;
     } catch (err) {
       this.logger.warn(`getNumberId failed for ${chatId}: ${String(err)}`);
