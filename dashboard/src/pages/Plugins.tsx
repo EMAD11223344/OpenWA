@@ -229,7 +229,7 @@ export default function Plugins() {
         {plugins.map(plugin => {
           const TypeIcon = pluginTypeIcons[plugin.type as PluginType] || Puzzle;
           const isLoading = actionLoading === plugin.id;
-          const isActiveEngine = plugin.type === 'engine' && plugin.id === currentEngine;
+          const isActiveEngine = plugin.isActive ?? (plugin.type === 'engine' && plugin.id === currentEngine);
           const isEnginePlugin = plugin.type === 'engine';
 
           return (
@@ -254,11 +254,20 @@ export default function Plugins() {
                 <p className="plugin-description">{plugin.description || t('plugins.noDescription')}</p>
 
                 <div className="plugin-status-row">
-                  <div className="plugin-status">
-                    <span className={`status-dot ${plugin.status}`} />
-                    <span className="status-text">{plugin.status}</span>
-                  </div>
-                  <span className="plugin-type-label">{plugin.type}</span>
+                  {isEnginePlugin ? (
+                    <div className="plugin-status">
+                      <span className={`status-dot ${plugin.isActive ? 'enabled' : 'installed'}`} />
+                      <span className="status-text">{plugin.isActive ? 'active' : 'available'}</span>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="plugin-status">
+                        <span className={`status-dot ${plugin.status}`} />
+                        <span className="status-text">{plugin.status}</span>
+                      </div>
+                      <span className="plugin-type-label">{plugin.type}</span>
+                    </>
+                  )}
                 </div>
 
                 {plugin.error && (

@@ -354,6 +354,7 @@ export interface Plugin {
   status: 'installed' | 'enabled' | 'disabled' | 'error';
   config: Record<string, unknown>;
   builtIn: boolean;
+  isActive?: boolean;
   provides: string[];
   loadedAt?: string;
   enabledAt?: string;

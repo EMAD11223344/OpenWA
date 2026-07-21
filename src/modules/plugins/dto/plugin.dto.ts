@@ -31,6 +31,9 @@ export class PluginDto {
   @ApiProperty({ description: 'Whether this is a built-in plugin' })
   builtIn!: boolean;
 
+  @ApiProperty({ description: 'Whether this is the currently active engine (only for engine-type plugins)' })
+  isActive!: boolean;
+
   @ApiProperty({ description: 'Features provided by this plugin' })
   provides!: string[];
 
