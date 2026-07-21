@@ -58,17 +58,15 @@ export class EngineFactory implements OnModuleInit {
         BaileysPlugin: { new (): unknown };
       };
       const baileysPlugin = new BaileysPlugin();
-      const baileysManifest =
-        (require('../plugins/engines/baileys/manifest.json') as PluginManifest) ||
-        ({
-          id: 'baileys',
-          name: 'Baileys Engine',
-          version: '1.0.0',
-          type: PluginType.ENGINE,
-          description: 'Pure WebSocket WhatsApp engine (no Chromium)',
-          main: 'index.ts',
-          provides: ['whatsapp-engine'],
-        } as PluginManifest);
+      const baileysManifest: PluginManifest = {
+        id: 'baileys',
+        name: 'Baileys Engine',
+        version: '1.0.0',
+        type: PluginType.ENGINE,
+        description: 'Pure WebSocket WhatsApp engine (no Chromium)',
+        main: 'index.ts',
+        provides: ['whatsapp-engine', 'text-messages', 'media-messages', 'group-management', 'low-memory'],
+      };
       this.pluginLoader.registerBuiltInPlugin(baileysManifest, baileysPlugin as never);
     } catch (err) {
       this.logger.warn(

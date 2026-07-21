@@ -353,42 +353,54 @@ export default function Plugins() {
                         onChange={e => setEngineConfig({ ...engineConfig, type: e.target.value })}
                       >
                         <option value="whatsapp-web.js">WhatsApp Web.js</option>
+                        <option value="baileys">Baileys (WebSocket, no Chromium)</option>
                       </select>
                     </div>
 
-                    <div className="form-group toggle-group">
-                      <div className="toggle-info">
-                        <label>{t('plugins.config.headless')}</label>
-                        <small>{t('plugins.config.headlessDesc')}</small>
+                    {engineConfig.type === 'whatsapp-web.js' ? (
+                      <>
+                        <div className="form-group toggle-group">
+                          <div className="toggle-info">
+                            <label>{t('plugins.config.headless')}</label>
+                            <small>{t('plugins.config.headlessDesc')}</small>
+                          </div>
+                          <label className="toggle-switch">
+                            <input
+                              type="checkbox"
+                              checked={engineConfig.headless}
+                              onChange={e => setEngineConfig({ ...engineConfig, headless: e.target.checked })}
+                            />
+                            <span className="toggle-slider"></span>
+                          </label>
+                        </div>
+
+                        <div className="form-group">
+                          <label>{t('plugins.config.sessionDataPath')}</label>
+                          <input
+                            type="text"
+                            value={engineConfig.sessionDataPath}
+                            onChange={e => setEngineConfig({ ...engineConfig, sessionDataPath: e.target.value })}
+                          />
+                        </div>
+
+                        <div className="form-group">
+                          <label>{t('plugins.config.browserArgs')}</label>
+                          <input
+                            type="text"
+                            value={engineConfig.browserArgs}
+                            onChange={e => setEngineConfig({ ...engineConfig, browserArgs: e.target.value })}
+                            placeholder="--no-sandbox --disable-gpu"
+                          />
+                        </div>
+                      </>
+                    ) : (
+                      <div className="form-group">
+                        <small style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
+                          Baileys uses pure WebSocket — no headless browser, session data path, or browser args needed.
+                          Set <code>ENGINE=baileys</code> in your Space environment variables to activate.
+                        </small>
                       </div>
-                      <label className="toggle-switch">
-                        <input
-                          type="checkbox"
-                          checked={engineConfig.headless}
-                          onChange={e => setEngineConfig({ ...engineConfig, headless: e.target.checked })}
-                        />
-                        <span className="toggle-slider"></span>
-                      </label>
-                    </div>
-
-                    <div className="form-group">
-                      <label>{t('plugins.config.sessionDataPath')}</label>
-                      <input
-                        type="text"
-                        value={engineConfig.sessionDataPath}
-                        onChange={e => setEngineConfig({ ...engineConfig, sessionDataPath: e.target.value })}
-                      />
-                    </div>
-
-                    <div className="form-group">
-                      <label>{t('plugins.config.browserArgs')}</label>
-                      <input
-                        type="text"
-                        value={engineConfig.browserArgs}
-                        onChange={e => setEngineConfig({ ...engineConfig, browserArgs: e.target.value })}
-                        placeholder="--no-sandbox --disable-gpu"
-                      />
-                    </div>
+                    )}
                   </div>
                 </>
               ) : (
