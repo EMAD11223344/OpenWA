@@ -381,6 +381,28 @@ export class SessionService implements OnModuleDestroy, OnModuleInit {
           },
         );
 
+        // Detect persistent network/SSL failures that won't resolve by retrying.
+        // Code 408 = request timeout; on HF data centers this means WhatsApp
+        // rejected the WebSocket TLS handshake (SSL alert 0). Reconnecting
+        // endlessly just wastes resources. Mark as FAILED so the user sees
+        // a clear error instead of an infinite reconnect loop.
+        const isPermanentFailure = /code=408|SSL|EPROTO|ECONNREFUSED|ENOTFOUND/i.test(reason);
+        if (isPermanentFailure) {
+          const reconnectState = this.reconnectStates.get(id);
+          if (reconnectState && reconnectState.attempts >= 1) {
+            this.logger.error(
+              `Session ${session.name} has persistent network failure after ${reconnectState.attempts} attempt(s) — marking as FAILED (reason: ${reason})`,
+              undefined,
+              { sessionId: id, action: 'permanent_failure' },
+            );
+            void this.updateStatus(id, SessionStatus.FAILED);
+            this.eventsGateway.emitSessionStatus(id, SessionStatus.FAILED, {
+              error: `Network failure: ${reason}. WhatsApp may be unreachable from this host. Check network or use a proxy.`,
+            });
+            return;
+          }
+        }
+
         void this.updateStatus(id, SessionStatus.DISCONNECTED);
 
         // Attempt to reconnect
