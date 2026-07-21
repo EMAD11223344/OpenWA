@@ -39,4 +39,10 @@ export class QRCodeResponseDto {
 
   @ApiProperty({ enum: SessionStatus, example: SessionStatus.QR_READY })
   status: SessionStatus;
+
+  @ApiPropertyOptional({
+    description: 'Error message if QR generation failed',
+    example: 'Engine failed — connection timed out or server unreachable',
+  })
+  error?: string;
 }

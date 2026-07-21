@@ -208,6 +208,7 @@ export interface EngineEventCallbacks {
   onMessageAck?: (messageId: string, ack: number) => void;
   onDisconnected?: (reason: string) => void;
   onStateChanged?: (state: EngineStatus) => void;
+  onError?: (error: string) => void;
 }
 
 export interface IWhatsAppEngine {

@@ -401,6 +401,14 @@ export class SessionService implements OnModuleDestroy, OnModuleInit {
           void this.updateStatus(id, newStatus);
         }
       },
+      onError: (error: string): void => {
+        this.logger.error(`Engine error for session ${session.name}: ${error}`, undefined, {
+          sessionId: id,
+          action: 'engine_error',
+        });
+        void this.updateStatus(id, SessionStatus.FAILED);
+        this.eventsGateway.emitSessionStatus(id, SessionStatus.FAILED, { error });
+      },
     });
 
     await this.updateStatus(id, SessionStatus.INITIALIZING);
@@ -565,21 +573,32 @@ export class SessionService implements OnModuleDestroy, OnModuleInit {
     return this.findOne(id);
   }
 
-  async getQRCode(id: string): Promise<{ qrCode: string; status: SessionStatus }> {
+  async getQRCode(id: string): Promise<{ qrCode: string; status: SessionStatus; error?: string }> {
     const session = await this.findOne(id);
     const engine = this.engines.get(id);
 
     if (!engine) {
-      throw new BadRequestException('Session is not started. Call POST /sessions/:id/start first.');
+      // Session was never started or engine was destroyed — report status so
+      // the frontend can show a meaningful message instead of "not ready yet".
+      return {
+        qrCode: '',
+        status: session.status,
+        error: session.status === SessionStatus.FAILED
+          ? 'Engine failed to start. Check logs for details.'
+          : 'Session is not started. Call POST /sessions/:id/start first.',
+      };
     }
 
     const qrCode = engine.getQRCode();
 
     if (!qrCode) {
       if (session.status === SessionStatus.READY) {
-        throw new BadRequestException('Session is already authenticated, no QR code needed');
+        return { qrCode: '', status: session.status, error: 'Session is already authenticated, no QR code needed' };
       }
-      throw new BadRequestException('QR code is not ready yet. Please wait...');
+      if (session.status === SessionStatus.FAILED) {
+        return { qrCode: '', status: session.status, error: 'Engine failed — connection timed out or server unreachable' };
+      }
+      return { qrCode: '', status: session.status, error: 'QR code is not ready yet. Please wait...' };
     }
 
     return {

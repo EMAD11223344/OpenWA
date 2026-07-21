@@ -54,6 +54,10 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
   private authState: any = null;
   private saveCreds: (() => Promise<void>) | null = null;
 
+  // Timeout handle for QR generation — if no QR arrives within 45s, report
+  // an error so the frontend doesn't show an infinite spinner.
+  private qrTimer: ReturnType<typeof setTimeout> | null = null;
+
   // Lazy-loaded baileys references — resolved at initialize() so the module
   // doesn't crash if @whiskeysockets/baileys isn't installed (e.g. when the
   // fallback whatsapp-web.js engine is actually in use).
@@ -124,10 +128,12 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
     });
 
     this.setupEventHandlers();
+    this.startQrTimer();
     this.logger.log(`Baileys socket created for session ${this.sessionId}`);
   }
 
   async disconnect(): Promise<void> {
+    this.clearQrTimer();
     if (this.socket) {
       try {
         this.socket.end(undefined);
@@ -163,6 +169,7 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
   }
 
   async destroy(): Promise<void> {
+    this.clearQrTimer();
     if (this.socket) {
       this.socket.end(undefined);
       this.socket = null;
@@ -196,6 +203,25 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
     this.status = status;
     this.callbacks.onStateChanged?.(status);
     this.emit('stateChanged', status);
+  }
+
+  private clearQrTimer(): void {
+    if (this.qrTimer) {
+      clearTimeout(this.qrTimer);
+      this.qrTimer = null;
+    }
+  }
+
+  private startQrTimer(): void {
+    this.clearQrTimer();
+    this.qrTimer = setTimeout(() => {
+      if (this.status !== EngineStatus.READY && this.status !== EngineStatus.QR_READY) {
+        const msg = 'No QR code received within 45s — WhatsApp server may be unreachable from this host. Try again or check network.';
+        this.logger.error(msg, undefined, { sessionId: this.sessionId });
+        this.setStatus(EngineStatus.FAILED);
+        this.callbacks.onError?.(msg);
+      }
+    }, 45_000);
   }
 
   private ensureReady(): void {
@@ -241,6 +267,8 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
       const { connection, lastDisconnect, qr, loginTimeout } = update;
 
       if (qr) {
+        // Clear the QR timeout — we got a QR code
+        this.clearQrTimer();
         // Convert raw Baileys QR string to data URL (same format as whatsapp-web.js adapter)
         // so the frontend <img src={qr}> can render it directly
         qrcode.toDataURL(qr, (err: Error | null, dataUrl: string) => {
@@ -257,6 +285,7 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
       }
 
       if (connection === 'open') {
+        this.clearQrTimer();
         this.qrCode = null;
         // Extract phone and pushName from the authenticated user
         const me = s.user;

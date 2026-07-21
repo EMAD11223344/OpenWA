@@ -19,8 +19,9 @@ export function Sessions() {
   const [error, setError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newSessionName, setNewSessionName] = useState('');
+  const [newSessionEngine, setNewSessionEngine] = useState('');
   const [creating, setCreating] = useState(false);
-  const [qrData, setQrData] = useState<{ sessionId: string; sessionName: string; qrCode: string } | null>(null);
+  const [qrData, setQrData] = useState<{ sessionId: string; sessionName: string; qrCode: string; error?: string } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedSession, setSelectedSession] = useState<Session | null>(null);
@@ -65,11 +66,26 @@ export function Sessions() {
   const fetchQR = useCallback(async (sessionId: string) => {
     try {
       const qr = await sessionApi.getQR(sessionId);
-      setQrData({ sessionId, sessionName: currentSessionName.current, qrCode: qr.qrCode });
+      if (qr.qrCode) {
+        setQrData({ sessionId, sessionName: currentSessionName.current, qrCode: qr.qrCode, error: undefined });
+      }
       if (qr.status === 'ready') {
         setQrData(null);
         currentSessionName.current = '';
         fetchSessions();
+        return;
+      }
+      // If there's an error and no QR, surface it instead of spinning forever
+      if (qr.error && !qr.qrCode) {
+        setQrData(prev => prev?.sessionId === sessionId
+          ? { ...prev, error: qr.error }
+          : prev
+        );
+        // Stop polling if the session has failed
+        if (qr.status === 'failed') {
+          currentSessionName.current = '';
+          fetchSessions();
+        }
       }
     } catch {
       // Keep qrData alive so the polling interval keeps retrying until the QR
@@ -78,8 +94,15 @@ export function Sessions() {
       const stillInitializing = currentSession &&
         ['initializing', 'connecting', 'qr_ready'].includes(currentSession.status);
       if (!stillInitializing) {
-        setQrData(null);
-        currentSessionName.current = '';
+        if (currentSession?.status === 'failed') {
+          setQrData(prev => prev?.sessionId === sessionId
+            ? { ...prev, error: 'Engine failed to connect. Check logs or try restarting the session.' }
+            : prev
+          );
+        } else {
+          setQrData(null);
+          currentSessionName.current = '';
+        }
         fetchSessions();
       }
     }
@@ -101,9 +124,10 @@ export function Sessions() {
     if (!newSessionName.trim()) return;
     try {
       setCreating(true);
-      const newSession = await sessionApi.create(newSessionName);
+      const newSession = await sessionApi.create(newSessionName, newSessionEngine || undefined);
       setSessions([...sessions, newSession]);
       setNewSessionName('');
+      setNewSessionEngine('');
       setShowCreateModal(false);
       toast.success(t('sessions.create.successTitle'), t('sessions.create.successDesc', { name: newSession.name }));
     } catch (err) {
@@ -158,12 +182,16 @@ export function Sessions() {
     const session = sessions.find(s => s.id === id);
     const sessionName = session?.name || '';
     // Show loading state immediately so the modal opens and polling starts
-    // even before Chromium has finished initializing.
-    setQrData({ sessionId: id, sessionName, qrCode: '' });
+    // even before the engine has finished initializing.
+    setQrData({ sessionId: id, sessionName, qrCode: '', error: undefined });
     currentSessionName.current = sessionName;
     try {
       const qr = await sessionApi.getQR(id);
-      setQrData({ sessionId: id, sessionName, qrCode: qr.qrCode });
+      if (qr.qrCode) {
+        setQrData({ sessionId: id, sessionName, qrCode: qr.qrCode, error: undefined });
+      } else if (qr.error) {
+        setQrData({ sessionId: id, sessionName, qrCode: '', error: qr.error });
+      }
     } catch (err) {
       console.error('Failed to get QR:', err);
       // Do not clear qrData here — keep the loading modal open so the
@@ -290,6 +318,22 @@ export function Sessions() {
               <p className="input-hint">
                 <Trans i18nKey="sessions.create.hint" components={{ code: <code /> }} />
               </p>
+              <label style={{ marginTop: '12px', display: 'block', fontWeight: 500 }}>Engine</label>
+              <select
+                value={newSessionEngine}
+                onChange={e => setNewSessionEngine(e.target.value)}
+                style={{
+                  width: '100%', padding: '8px 12px', borderRadius: '8px',
+                  border: '1px solid #334155', background: '#1e293b', color: '#e2e8f0', fontSize: '14px',
+                }}
+              >
+                <option value="">Default (from Plugins settings)</option>
+                <option value="whatsapp-web.js">whatsapp-web.js (Chromium)</option>
+                <option value="baileys">Baileys (WebSocket)</option>
+              </select>
+              <p className="input-hint">
+                Choose the WhatsApp engine for this session. "Default" uses whichever engine is set as active in Plugins.
+              </p>
               {newSessionName && !/^[a-z0-9-]+$/.test(newSessionName) && (
                 <p className="input-error">{t('sessions.create.invalidChars')}</p>
               )}
@@ -338,7 +382,26 @@ export function Sessions() {
               </button>
             </div>
             <div className="modal-body" style={{ textAlign: 'center' }}>
-              {qrData.qrCode ? (
+              {qrData.error && !qrData.qrCode ? (
+                <div style={{ padding: '2rem' }}>
+                  <div style={{ fontSize: '48px', marginBottom: '12px' }}>⚠️</div>
+                  <p style={{ color: '#ef4444', fontWeight: 600, marginBottom: '8px' }}>Connection Error</p>
+                  <p style={{ color: '#94a3b8', fontSize: '14px', marginBottom: '16px' }}>{qrData.error}</p>
+                  <button
+                    className="btn-primary"
+                    onClick={async () => {
+                      setQrData(null);
+                      try {
+                        await sessionApi.stop(qrData.sessionId);
+                        await sessionApi.start(qrData.sessionId);
+                        handleShowQR(qrData.sessionId);
+                      } catch { /* ignore */ }
+                    }}
+                  >
+                    Retry
+                  </button>
+                </div>
+              ) : qrData.qrCode ? (
                 <>
                   <img src={qrData.qrCode} alt="QR" style={{ maxWidth: '280px', borderRadius: '12px' }} />
                   <div className="qr-instructions">
