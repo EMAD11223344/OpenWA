@@ -7,6 +7,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Baileys Engine adapter** (`src/engine/adapters/baileys.adapter.ts`): Pure WebSocket
+  WhatsApp engine via `@whiskeysockets/baileys ^7.0.0-rc.13`. No Chromium, no browser.
+  30–80 MB per session vs 250–400 MB for whatsapp-web.js. Realistic HF-free capacity:
+  8–12 sessions (up from hard-cap 3).
+  - Full lifecycle: initialize, disconnect, logout, destroy.
+  - Messaging: text, image, video, audio, document, contact, sticker, location.
+  - Reactions, replies, forwards, deletions.
+  - Groups: getParticipants, createGroup, add/remove/promote/demote, leave, invite.
+  - Contacts: getContacts, getContactById, checkNumberExists, block/unblock.
+  - QR codes converted to data URL (`qrcode.toDataURL`) for frontend `<img>` compatibility.
+  - Channels, Status, Catalog, Labels: stub ("not yet implemented").
+- **Baileys Engine Plugin** (`src/plugins/engines/baileys/`): `IEnginePlugin` wrapper
+  + `manifest.json`. Registered as built-in alongside whatsapp-web.js.
+- **Engine Watchdog** (`src/core/engine-watchdog.service.ts`):
+  - `@Cron(EVERY_MINUTE)` tick walks all active engines.
+  - Stuck recovery: sessions stuck in INITIALIZING/QR_READY/AUTHENTICATING/DISCONNECTED
+    for ≥ 90s get destroy() + reinit().
+  - Per-session circuit-breaker: max 3 recovery attempts per 10-minute rolling window.
+    After 3, session is skipped until explicit `restartEngine()`.
+  - Memory-aware cull: if `rss > WATCHDOG_MEMORY_LIMIT_MB` (default: half host RAM),
+    the oldest non-READY session is culled to relieve pressure.
+  - ENV overrides: `WATCHDOG_STUCK_THRESHOLD_MS`, `WATCHDOG_MEMORY_LIMIT_MB`,
+    `WATCHDOG_MAX_ATTEMPTS`, `WATCHDOG_ATTEMPT_WINDOW_MS`.
+  - All logs prefixed with `WATCHDOG:` for grep-ability.
+- **Runtime engine switching**: `POST /infra/engines/switch` endpoint + dashboard
+  "Set as Active" button. Changes default engine in-memory without restart.
+- **Dashboard Plugins tab improvements**:
+  - Baileys now visible alongside WhatsApp Web.js.
+  - "Currently Active" badge on the running engine.
+  - Switch bar when 2+ engines available.
+  - Config modal adapts: Baileys shows info blurb (no headless/browser args needed).
+- **Multi-account isolation proof spec** (5/5 pass): Two Baileys adapters with different
+  auth dirs — independent state, isolated creds, independent messaging.
+- **Memory cull path spec**: Simulates 12 sessions, fake RSS > 80%, asserts oldest
+  non-READY session is culled.
+- **Circuit breaker spec**: 4 rapid recovery attempts → 4th skipped + log. Window
+  expiry resets counter. READY session clears prior attempts.
+- **`safeAsync` wrappers** (`src/common/utils/safe-async.ts`): `safeAsync`, `fireAndForget`,
+  `safeRetry` — never-throw helpers for watchdog and fire-and-forget call sites.
+- **Unbounded start gate**: `BAILEYS_MAX_SESSIONS=0` (default) = unlimited sessions.
+  Operators can set a budget via `BAILEYS_MAX_SESSIONS=<int>`.
+
+### Fixed
+
+- **QR code format mismatch**: Baileys adapter now converts raw QR string to data URL
+  via `qrcode.toDataURL()`, matching whatsapp-web.js adapter behavior. Frontend
+  `<img src={qr}>` now renders correctly for both engines.
+- **WebSocket QR event not fired**: `onQRCode` callback in `session.service.ts` now
+  passes the QR string to `EventsGateway.emitQRCode()`, enabling real-time QR delivery
+  via WebSocket (previously only REST polling worked).
+- **Dashboard plugin visibility**: `plugins.service.ts` `builtIn` flag now includes
+  baileys alongside whatsapp-web.js.
+- **Engine factory baileys registration**: Inlined manifest (was failing because
+  NestJS compiler doesn't copy `.json` to `dist/`).
+
 ## [0.1.6] - 2026-05-17
 
 ### Fixed

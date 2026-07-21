@@ -1,6 +1,7 @@
 import { EventEmitter } from 'events';
 import path from 'path';
 import fs from 'fs/promises';
+import * as qrcode from 'qrcode';
 import {
   IWhatsAppEngine,
   EngineStatus,
@@ -240,10 +241,19 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
       const { connection, lastDisconnect, qr, loginTimeout } = update;
 
       if (qr) {
-        this.qrCode = qr;
-        this.setStatus(EngineStatus.QR_READY);
-        this.callbacks.onQRCode?.(qr);
-        this.logger.log(`QR generated for session ${this.sessionId}`);
+        // Convert raw Baileys QR string to data URL (same format as whatsapp-web.js adapter)
+        // so the frontend <img src={qr}> can render it directly
+        qrcode.toDataURL(qr, (err: Error | null, dataUrl: string) => {
+          if (err) {
+            this.logger.error(`Failed to convert QR to data URL: ${String(err)}`);
+            this.qrCode = qr; // fallback to raw string
+          } else {
+            this.qrCode = dataUrl;
+          }
+          this.setStatus(EngineStatus.QR_READY);
+          this.callbacks.onQRCode?.(this.qrCode!);
+          this.logger.log(`QR generated for session ${this.sessionId}`);
+        });
       }
 
       if (connection === 'open') {
