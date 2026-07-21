@@ -1,0 +1,840 @@
+import { EventEmitter } from 'events';
+import path from 'path';
+import fs from 'fs/promises';
+import {
+  IWhatsAppEngine,
+  EngineStatus,
+  EngineEventCallbacks,
+  IncomingMessage,
+  MessageResult,
+  MediaInput,
+  Contact,
+  ContactCard,
+  LocationInput,
+  Group,
+  GroupInfo,
+  GroupParticipant,
+  Label,
+  MessageReaction,
+  Status,
+  TextStatusOptions,
+  StatusResult,
+  Channel,
+  ChannelMessage,
+  Catalog,
+  Product,
+  ProductQueryOptions,
+  PaginatedProducts,
+} from '../interfaces/whatsapp-engine.interface';
+import { createLogger } from '../../common/services/logger.service';
+
+export interface BaileysAdapterConfig {
+  sessionId: string;
+  authDir: string;
+  printQR?: boolean;
+}
+
+/**
+ * Baileys adapter — pure WebSocket WhatsApp engine.
+ * No Chromium. No browser. 30-80 MB per session vs 250-400 MB for whatsapp-web.js.
+ *
+ * Lifecycle:
+ *   initialize() → socket.connect() → on QR → user scans → creds.update saved
+ *                → connection.open → callbacks.onReady()
+ *   destroy()    → socket.end() + creds persisted for next boot
+ */
+export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
+  private socket: any = null;
+  private status: EngineStatus = EngineStatus.DISCONNECTED;
+  private qrCode: string | null = null;
+  private phoneNumber: string | null = null;
+  private pushName: string | null = null;
+  private callbacks: EngineEventCallbacks = {};
+  private authState: any = null;
+  private saveCreds: (() => Promise<void>) | null = null;
+
+  // Lazy-loaded baileys references — resolved at initialize() so the module
+  // doesn't crash if @whiskeysockets/baileys isn't installed (e.g. when the
+  // fallback whatsapp-web.js engine is actually in use).
+  private B: any = null;
+
+  private readonly logger = createLogger('BaileysAdapter');
+  private readonly sessionId: string;
+  private readonly authDir: string;
+  private readonly printQR: boolean;
+
+  constructor(config: BaileysAdapterConfig) {
+    super();
+    this.sessionId = config.sessionId;
+    this.authDir = config.authDir;
+    this.printQR = config.printQR ?? false;
+  }
+
+  // ─── Lifecycle ───────────────────────────────────────────────────────────────
+
+  async initialize(callbacks: EngineEventCallbacks): Promise<void> {
+    this.callbacks = callbacks;
+    this.setStatus(EngineStatus.INITIALIZING);
+
+    try {
+      // Lazy-require baileys so the module is optional at startup.
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const baileys = require('@whiskeysockets/baileys');
+      this.B = baileys;
+    } catch (err) {
+      this.logger.error('Baileys library not installed — run `npm install @whiskeysockets/baileys` first');
+      this.setStatus(EngineStatus.FAILED);
+      throw new Error('@whiskeysockets/baileys package not found');
+    }
+
+    // Ensure auth directory exists
+    await fs.mkdir(this.authDir, { recursive: true });
+
+    // Load or create auth state
+    const { state, saveCreds } = await this.B.useMultiFileAuthState(this.authDir);
+    this.authState = state;
+    this.saveCreds = saveCreds;
+
+    // Persist creds every time they're updated (multi-device rekey etc.)
+    state.creds?.id && this.logger.log(`Auth state loaded for ${this.sessionId}`);
+
+    // Create the socket
+    this.socket = this.B.makeWASocket({
+      auth: state,
+      printQRInTerminal: this.printQR,
+      // Memory-safe defaults for constrained hosts
+      browser: {
+        clientId: this.sessionId,
+        name: 'OpenWA',
+        version: [2, 3000, 102376601],
+      },
+      // Mark as a Linked Device (same as WhatsApp Web)
+      markOnlineOnConnect: false,
+      // Reduce memory: don't sync full history on first connect
+      syncFullHistory: false,
+      // Connection retry
+      connectTimeoutMs: 60_000,
+      retryRequestDelayMs: 2_000,
+      maxRetries: 3,
+      // Don't generate QR in terminal by default (controlled via printQR)
+      generateHighQualityLinkPreview: false,
+      // Proxy support
+      ...(this.getProxyConfig()),
+    });
+
+    this.setupEventHandlers();
+    this.logger.log(`Baileys socket created for session ${this.sessionId}`);
+  }
+
+  async disconnect(): Promise<void> {
+    if (this.socket) {
+      try {
+        this.socket.end(undefined);
+      } catch (err) {
+        this.logger.warn(`Disconnect failed: ${String(err)}`);
+      }
+      this.socket = null;
+      this.setStatus(EngineStatus.DISCONNECTED);
+    }
+  }
+
+  async logout(): Promise<void> {
+    if (this.socket) {
+      try {
+        await this.socket.logout();
+      } catch (err) {
+        this.logger.warn(`Logout failed: ${String(err)}`);
+        try {
+          this.socket.end(undefined);
+        } catch {
+          // ignore
+        }
+      }
+      this.socket = null;
+      this.setStatus(EngineStatus.DISCONNECTED);
+    }
+    // Clear stored credentials so next start requires QR scan
+    try {
+      await fs.rm(this.authDir, { recursive: true, force: true });
+    } catch {
+      // ignore
+    }
+  }
+
+  async destroy(): Promise<void> {
+    if (this.socket) {
+      this.socket.end(undefined);
+      this.socket = null;
+      this.setStatus(EngineStatus.DISCONNECTED);
+    }
+    this.authState = null;
+    this.saveCreds = null;
+  }
+
+  // ─── Status ──────────────────────────────────────────────────────────────────
+
+  getStatus(): EngineStatus {
+    return this.status;
+  }
+
+  getQRCode(): string | null {
+    return this.qrCode;
+  }
+
+  getPhoneNumber(): string | null {
+    return this.phoneNumber;
+  }
+
+  getPushName(): string | null {
+    return this.pushName;
+  }
+
+  // ─── Internal helpers ────────────────────────────────────────────────────────
+
+  private setStatus(status: EngineStatus): void {
+    this.status = status;
+    this.callbacks.onStateChanged?.(status);
+    this.emit('stateChanged', status);
+  }
+
+  private ensureReady(): void {
+    if (this.status !== EngineStatus.READY || !this.socket) {
+      throw new Error('WhatsApp client is not ready');
+    }
+  }
+
+  /**
+   * Resolve a chat JID. Baileys handles LID internally via signalRepository,
+   * so most JIDs work directly. Phone numbers need @c.us suffix.
+   */
+  private resolveJid(chatId: string): string {
+    if (chatId.endsWith('@lid') || chatId.endsWith('@g.us') || chatId.endsWith('@s.whatsapp.net')) {
+      return chatId;
+    }
+    // Bare phone number — append @c.us
+    if (/^\d+$/.test(chatId)) {
+      return `${chatId}@s.whatsapp.net`;
+    }
+    return chatId;
+  }
+
+  private getProxyConfig(): Record<string, unknown> {
+    // Proxy support can be added via config
+    return {};
+  }
+
+  private setupEventHandlers(): void {
+    if (!this.socket) return;
+
+    const s = this.socket;
+
+    // ── Auth state persistence ─────────────────────────────────────────────
+    s.ev.on('creds.update', () => {
+      this.saveCreds?.().catch((err: unknown) => {
+        this.logger.error(`Failed to save credentials: ${String(err)}`);
+      });
+    });
+
+    // ── Connection lifecycle ───────────────────────────────────────────────
+    s.ev.on('connection.update', (update: any) => {
+      const { connection, lastDisconnect, qr, loginTimeout } = update;
+
+      if (qr) {
+        this.qrCode = qr;
+        this.setStatus(EngineStatus.QR_READY);
+        this.callbacks.onQRCode?.(qr);
+        this.logger.log(`QR generated for session ${this.sessionId}`);
+      }
+
+      if (connection === 'open') {
+        this.qrCode = null;
+        // Extract phone and pushName from the authenticated user
+        const me = s.user;
+        this.phoneNumber = me?.id?.replace(/:.*$/, '').replace(/@.*$/, '') ?? null;
+        this.pushName = me?.name ?? null;
+        this.setStatus(EngineStatus.READY);
+        this.callbacks.onReady?.(this.phoneNumber ?? '', this.pushName ?? '');
+        this.logger.log(`Session ${this.sessionId} connected as ${this.phoneNumber} (${this.pushName})`);
+      }
+
+      if (connection === 'close') {
+        const statusCode = lastDisconnect?.error?.output?.statusCode;
+        // DisconnectReason 401 = logged out / unauthorized
+        if (statusCode === 401) {
+          this.setStatus(EngineStatus.FAILED);
+          this.callbacks.onDisconnected?.('Logged out — re-pair required');
+          return;
+        }
+        // DisconnectReason 408 = request timeout (network issue)
+        // DisconnectReason 428 = connection closed (try reconnect)
+        // DisconnectReason 440 = connection replaced (logged in elsewhere)
+        // DisconnectReason 515 = restart required
+        if (statusCode === 440) {
+          this.setStatus(EngineStatus.FAILED);
+          this.callbacks.onDisconnected?.('Connection replaced by another device');
+          return;
+        }
+        // All other codes: transient disconnect — let baileys retry automatically
+        this.setStatus(EngineStatus.DISCONNECTED);
+        this.callbacks.onDisconnected?.(`Connection closed (code=${statusCode ?? 'unknown'})`);
+      }
+
+      if (connection === 'connecting') {
+        if (this.status !== EngineStatus.QR_READY) {
+          this.setStatus(EngineStatus.INITIALIZING);
+        }
+      }
+    });
+
+    // ── Incoming messages ──────────────────────────────────────────────────
+    s.ev.on('messages.upsert', (messageUpdate: any) => {
+      const messages = messageUpdate.messages ?? [];
+      for (const msg of messages) {
+        if (messageUpdate.type !== 'notify') continue; // skip historical sync
+        if (msg.key?.fromMe) continue; // skip own messages
+
+        const incoming = this.mapIncomingMessage(msg);
+        if (incoming) {
+          this.callbacks.onMessage?.(incoming);
+        }
+      }
+    });
+  }
+
+  private mapIncomingMessage(msg: any): IncomingMessage | null {
+    try {
+      const key = msg.key ?? {};
+      const from = key.remoteJid ?? '';
+      const body =
+        msg.message?.conversation ??
+        msg.message?.extendedTextMessage?.text ??
+        msg.message?.imageMessage?.caption ??
+        msg.message?.videoMessage?.caption ??
+        msg.message?.documentMessage?.caption ??
+        '';
+
+      const isGroup = from.endsWith('@g.us');
+      const fromMe = key.fromMe ?? false;
+
+      // Detect message type
+      let type = 'text';
+      if (msg.message?.imageMessage) type = 'image';
+      else if (msg.message?.videoMessage) type = 'video';
+      else if (msg.message?.audioMessage) type = 'audio';
+      else if (msg.message?.documentMessage) type = 'document';
+      else if (msg.message?.locationMessage) type = 'location';
+      else if (msg.message?.contactMessage) type = 'contact';
+      else if (msg.message?.stickerMessage) type = 'sticker';
+
+      return {
+        id: key.id ?? `fallback-${Date.now()}`,
+        from,
+        to: '',
+        chatId: from,
+        body,
+        type,
+        timestamp: msg.messageTimestamp ?? Math.floor(Date.now() / 1000),
+        fromMe,
+        isGroup,
+        media: msg.message?.imageMessage || msg.message?.videoMessage || msg.message?.audioMessage || msg.message?.documentMessage
+          ? {
+              mimetype: msg.message?.imageMessage?.mimetype ?? msg.message?.videoMessage?.mimetype ?? msg.message?.audioMessage?.mimetype ?? msg.message?.documentMessage?.mimetype ?? 'application/octet-stream',
+              filename: msg.message?.documentMessage?.fileName ?? undefined,
+            }
+          : undefined,
+        quotedMessage: msg.message?.extendedTextMessage?.contextInfo?.quotedMessage
+          ? {
+              id: msg.message.extendedTextMessage.contextInfo.stanzaId ?? '',
+              body: msg.message.extendedTextMessage.contextInfo.conversation ?? '',
+            }
+          : undefined,
+        location: msg.message?.locationMessage
+          ? {
+              latitude: msg.message.locationMessage.degreesLatitude ?? 0,
+              longitude: msg.message.locationMessage.degreesLongitude ?? 0,
+              address: msg.message.locationMessage.address ?? undefined,
+            }
+          : undefined,
+      };
+    } catch {
+      this.logger.warn(`Failed to map incoming message: ${String(msg)}`);
+      return null;
+    }
+  }
+
+  // ─── Messaging: Basic ────────────────────────────────────────────────────────
+
+  async sendTextMessage(chatId: string, text: string): Promise<MessageResult> {
+    this.ensureReady();
+    const jid = this.resolveJid(chatId);
+    const result = await this.socket!.sendMessage(jid, { text });
+    return {
+      id: result?.key?.id ?? `fallback-${Date.now()}`,
+      timestamp: result?.messageTimestamp ?? Math.floor(Date.now() / 1000),
+    };
+  }
+
+  async sendImageMessage(chatId: string, media: MediaInput): Promise<MessageResult> {
+    this.ensureReady();
+    const jid = this.resolveJid(chatId);
+    const buffer = await this.resolveMediaBuffer(media);
+    const result = await this.socket!.sendMessage(jid, {
+      image: buffer,
+      caption: media.caption ?? '',
+      mimetype: media.mimetype,
+    });
+    return {
+      id: result?.key?.id ?? `fallback-${Date.now()}`,
+      timestamp: result?.messageTimestamp ?? Math.floor(Date.now() / 1000),
+    };
+  }
+
+  async sendVideoMessage(chatId: string, media: MediaInput): Promise<MessageResult> {
+    this.ensureReady();
+    const jid = this.resolveJid(chatId);
+    const buffer = await this.resolveMediaBuffer(media);
+    const result = await this.socket!.sendMessage(jid, {
+      video: buffer,
+      caption: media.caption ?? '',
+      mimetype: media.mimetype,
+    });
+    return {
+      id: result?.key?.id ?? `fallback-${Date.now()}`,
+      timestamp: result?.messageTimestamp ?? Math.floor(Date.now() / 1000),
+    };
+  }
+
+  async sendAudioMessage(chatId: string, media: MediaInput): Promise<MessageResult> {
+    this.ensureReady();
+    const jid = this.resolveJid(chatId);
+    const buffer = await this.resolveMediaBuffer(media);
+    const result = await this.socket!.sendMessage(jid, {
+      audio: buffer,
+      mimetype: media.mimetype,
+      ptt: true, // push-to-talk / voice message
+    });
+    return {
+      id: result?.key?.id ?? `fallback-${Date.now()}`,
+      timestamp: result?.messageTimestamp ?? Math.floor(Date.now() / 1000),
+    };
+  }
+
+  async sendDocumentMessage(chatId: string, media: MediaInput): Promise<MessageResult> {
+    this.ensureReady();
+    const jid = this.resolveJid(chatId);
+    const buffer = await this.resolveMediaBuffer(media);
+    const result = await this.socket!.sendMessage(jid, {
+      document: buffer,
+      fileName: media.filename ?? 'document',
+      mimetype: media.mimetype,
+      caption: media.caption,
+    });
+    return {
+      id: result?.key?.id ?? `fallback-${Date.now()}`,
+      timestamp: result?.messageTimestamp ?? Math.floor(Date.now() / 1000),
+    };
+  }
+
+  private async resolveMediaBuffer(media: MediaInput): Promise<Buffer> {
+    if (Buffer.isBuffer(media.data)) return media.data;
+    if (typeof media.data === 'string' && media.data.startsWith('http')) {
+      const res = await fetch(media.data);
+      if (!res.ok) throw new Error(`Failed to fetch media: ${res.status}`);
+      return Buffer.from(await res.arrayBuffer());
+    }
+    if (typeof media.data === 'string') {
+      return Buffer.from(media.data, 'base64');
+    }
+    throw new Error('Invalid media data: expected Buffer, URL string, or base64 string');
+  }
+
+  // ─── Messaging: Extended (Phase 3) ──────────────────────────────────────────
+
+  async sendLocationMessage(chatId: string, location: LocationInput): Promise<MessageResult> {
+    this.ensureReady();
+    const jid = this.resolveJid(chatId);
+    const result = await this.socket!.sendMessage(jid, {
+      location: {
+        degreesLatitude: location.latitude,
+        degreesLongitude: location.longitude,
+        name: location.description,
+        address: location.address,
+      },
+    });
+    return {
+      id: result?.key?.id ?? `fallback-${Date.now()}`,
+      timestamp: result?.messageTimestamp ?? Math.floor(Date.now() / 1000),
+    };
+  }
+
+  async sendContactMessage(chatId: string, contact: ContactCard): Promise<MessageResult> {
+    this.ensureReady();
+    const jid = this.resolveJid(chatId);
+    const result = await this.socket!.sendMessage(jid, {
+      contacts: {
+        displayName: contact.name,
+        contacts: [{ vcard: `BEGIN:VCARD\nVERSION:3.0\nFN:${contact.name}\nTEL;type=CELL:${contact.number}\nEND:VCARD` }],
+      },
+    });
+    return {
+      id: result?.key?.id ?? `fallback-${Date.now()}`,
+      timestamp: result?.messageTimestamp ?? Math.floor(Date.now() / 1000),
+    };
+  }
+
+  async sendStickerMessage(chatId: string, media: MediaInput): Promise<MessageResult> {
+    this.ensureReady();
+    const jid = this.resolveJid(chatId);
+    const buffer = await this.resolveMediaBuffer(media);
+    const result = await this.socket!.sendMessage(jid, {
+      sticker: buffer,
+      mimetype: media.mimetype,
+    });
+    return {
+      id: result?.key?.id ?? `fallback-${Date.now()}`,
+      timestamp: result?.messageTimestamp ?? Math.floor(Date.now() / 1000),
+    };
+  }
+
+  // ─── Reply & Forward ─────────────────────────────────────────────────────────
+
+  async replyToMessage(chatId: string, quotedMsgId: string, text: string): Promise<MessageResult> {
+    this.ensureReady();
+    const jid = this.resolveJid(chatId);
+    const result = await this.socket!.sendMessage(jid, {
+      text,
+      quoted: { key: { id: quotedMsgId, remoteJid: jid } },
+    });
+    return {
+      id: result?.key?.id ?? `fallback-${Date.now()}`,
+      timestamp: result?.messageTimestamp ?? Math.floor(Date.now() / 1000),
+    };
+  }
+
+  async forwardMessage(fromChatId: string, toChatId: string, messageId: string): Promise<MessageResult> {
+    this.ensureReady();
+    const toJid = this.resolveJid(toChatId);
+    const result = await this.socket!.forwardMessage(toJid, {
+      key: { id: messageId, remoteJid: this.resolveJid(fromChatId) },
+      message: {},
+    } as any);
+    return {
+      id: result?.key?.id ?? `fallback-${Date.now()}`,
+      timestamp: result?.messageTimestamp ?? Math.floor(Date.now() / 1000),
+    };
+  }
+
+  // ─── Reactions ───────────────────────────────────────────────────────────────
+
+  async reactToMessage(chatId: string, messageId: string, emoji: string): Promise<void> {
+    this.ensureReady();
+    const jid = this.resolveJid(chatId);
+    await this.socket!.sendMessage(jid, {
+      react: { text: emoji, key: { id: messageId, remoteJid: jid } },
+    });
+  }
+
+  async getMessageReactions(chatId: string, messageId: string): Promise<MessageReaction[]> {
+    // Baileys doesn't expose a direct API for fetching reactions on a message.
+    // Reactions arrive as real-time events via `messages.update`. We can't
+    // query them on demand without storing them. Return empty for now.
+    return [];
+  }
+
+  // ─── Message Operations ──────────────────────────────────────────────────────
+
+  async deleteMessage(chatId: string, messageId: string, forEveryone?: boolean): Promise<void> {
+    this.ensureReady();
+    const jid = this.resolveJid(chatId);
+    await this.socket!.sendMessage(jid, {
+      delete: { remoteJid: jid, fromMe: forEveryone, id: messageId },
+    });
+  }
+
+  // ─── Contacts ────────────────────────────────────────────────────────────────
+
+  async getContacts(): Promise<Contact[]> {
+    this.ensureReady();
+    const storeContacts = this.socket?.store?.contacts ?? {};
+    return Object.entries(storeContacts).map(([id, data]: [string, any]) => ({
+      id,
+      name: data.name ?? data.notify ?? undefined,
+      pushName: data.notify ?? undefined,
+      number: id.replace(/@.*$/, ''),
+      isMyContact: data.isMyContact ?? false,
+      isBlocked: data.isBlocked ?? false,
+      profilePicUrl: data.profilePicUrl ?? undefined,
+    }));
+  }
+
+  async getContactById(contactId: string): Promise<Contact | null> {
+    this.ensureReady();
+    const resolved = this.resolveJid(contactId);
+    const storeContacts = this.socket?.store?.contacts ?? {};
+    const data = storeContacts[resolved];
+    if (!data) {
+      // Try to fetch from server
+      try {
+        const info = await this.socket!.onWhatsApp(contactId.replace(/@.*$/, ''));
+        if (info?.[0]?.exists) {
+          return {
+            id: resolved,
+            number: contactId.replace(/@.*$/, ''),
+            isMyContact: false,
+            isBlocked: false,
+          };
+        }
+      } catch {
+        // ignore
+      }
+      return null;
+    }
+    return {
+      id: resolved,
+      name: data.name ?? data.notify ?? undefined,
+      pushName: data.notify ?? undefined,
+      number: resolved.replace(/@.*$/, ''),
+      isMyContact: data.isMyContact ?? false,
+      isBlocked: data.isBlocked ?? false,
+      profilePicUrl: data.profilePicUrl ?? undefined,
+    };
+  }
+
+  async checkNumberExists(number: string): Promise<boolean> {
+    this.ensureReady();
+    try {
+      const result = await this.socket!.onWhatsApp(number.replace(/\D/g, ''));
+      return result?.[0]?.exists ?? false;
+    } catch {
+      return false;
+    }
+  }
+
+  async getProfilePicture(contactId: string): Promise<string | null> {
+    this.ensureReady();
+    try {
+      const resolved = this.resolveJid(contactId);
+      const ppUrl = await this.socket!.profilePictureUrl(resolved, 'image');
+      return ppUrl ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  // ─── Contact Extended Operations ─────────────────────────────────────────────
+
+  async blockContact(contactId: string): Promise<void> {
+    this.ensureReady();
+    const resolved = this.resolveJid(contactId);
+    await this.socket!.updateBlockStatus(resolved, 'block');
+  }
+
+  async unblockContact(contactId: string): Promise<void> {
+    this.ensureReady();
+    const resolved = this.resolveJid(contactId);
+    await this.socket!.updateBlockStatus(resolved, 'unblock');
+  }
+
+  // ─── Groups: Basic ───────────────────────────────────────────────────────────
+
+  async getGroups(): Promise<Group[]> {
+    this.ensureReady();
+    const storeGroups = this.socket?.store?.groupMetadata ?? {};
+    return Object.entries(storeGroups).map(([id, meta]: [string, any]) => ({
+      id,
+      name: meta.subject ?? 'Unknown Group',
+      participantsCount: meta.participants?.length ?? 0,
+    }));
+  }
+
+  // ─── Groups: Extended (Phase 3) ─────────────────────────────────────────────
+
+  async getGroupInfo(groupId: string): Promise<GroupInfo | null> {
+    this.ensureReady();
+    const resolved = this.resolveJid(groupId);
+    if (!resolved.endsWith('@g.us')) throw new Error('Chat is not a group');
+    try {
+      const meta = await this.socket!.groupMetadata(resolved);
+      return {
+        id: resolved,
+        name: meta.subject ?? '',
+        description: meta.desc ?? undefined,
+        owner: meta.owner ?? undefined,
+        participants: (meta.participants ?? []).map((p: any) => ({
+          id: p.id,
+          number: p.id.replace(/@.*$/, ''),
+          isAdmin: p.admin === 'admin' || p.admin === 'superadmin',
+          isSuperAdmin: p.admin === 'superadmin',
+        })),
+        isReadOnly: meta.restrict ?? false,
+        isAnnounce: meta.announce ?? false,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  async createGroup(name: string, participants: string[]): Promise<Group> {
+    this.ensureReady();
+    const resolved = participants.map(p => this.resolveJid(p));
+    const result = await this.socket!.groupCreate(name, resolved);
+    return {
+      id: result.id,
+      name: result.subject,
+      participantsCount: result.participants?.length ?? 0,
+    };
+  }
+
+  async addParticipants(groupId: string, participants: string[]): Promise<void> {
+    this.ensureReady();
+    const gJid = this.resolveJid(groupId);
+    if (!gJid.endsWith('@g.us')) throw new Error('Chat is not a group');
+    const pJids = participants.map(p => this.resolveJid(p));
+    await this.socket!.groupParticipantsUpdate(gJid, pJids, 'add');
+  }
+
+  async removeParticipants(groupId: string, participants: string[]): Promise<void> {
+    this.ensureReady();
+    const gJid = this.resolveJid(groupId);
+    if (!gJid.endsWith('@g.us')) throw new Error('Chat is not a group');
+    const pJids = participants.map(p => this.resolveJid(p));
+    await this.socket!.groupParticipantsUpdate(gJid, pJids, 'remove');
+  }
+
+  async promoteParticipants(groupId: string, participants: string[]): Promise<void> {
+    this.ensureReady();
+    const gJid = this.resolveJid(groupId);
+    if (!gJid.endsWith('@g.us')) throw new Error('Chat is not a group');
+    const pJids = participants.map(p => this.resolveJid(p));
+    await this.socket!.groupParticipantsUpdate(gJid, pJids, 'promote');
+  }
+
+  async demoteParticipants(groupId: string, participants: string[]): Promise<void> {
+    this.ensureReady();
+    const gJid = this.resolveJid(groupId);
+    if (!gJid.endsWith('@g.us')) throw new Error('Chat is not a group');
+    const pJids = participants.map(p => this.resolveJid(p));
+    await this.socket!.groupParticipantsUpdate(gJid, pJids, 'demote');
+  }
+
+  async leaveGroup(groupId: string): Promise<void> {
+    this.ensureReady();
+    const gJid = this.resolveJid(groupId);
+    if (!gJid.endsWith('@g.us')) throw new Error('Chat is not a group');
+    await this.socket!.groupLeave(gJid);
+  }
+
+  async setGroupSubject(groupId: string, subject: string): Promise<void> {
+    this.ensureReady();
+    const gJid = this.resolveJid(groupId);
+    if (!gJid.endsWith('@g.us')) throw new Error('Chat is not a group');
+    await this.socket!.groupUpdateSubject(gJid, subject);
+  }
+
+  async setGroupDescription(groupId: string, description: string): Promise<void> {
+    this.ensureReady();
+    const gJid = this.resolveJid(groupId);
+    if (!gJid.endsWith('@g.us')) throw new Error('Chat is not a group');
+    await this.socket!.groupUpdateDescription(gJid, description);
+  }
+
+  async getGroupInviteCode(groupId: string): Promise<string> {
+    this.ensureReady();
+    const gJid = this.resolveJid(groupId);
+    if (!gJid.endsWith('@g.us')) throw new Error('Chat is not a group');
+    return this.socket!.groupInviteCode(gJid);
+  }
+
+  async revokeGroupInviteCode(groupId: string): Promise<string> {
+    this.ensureReady();
+    const gJid = this.resolveJid(groupId);
+    if (!gJid.endsWith('@g.us')) throw new Error('Chat is not a group');
+    return this.socket!.groupRevokeInvite(gJid);
+  }
+
+  // ─── Labels, Channels, Status, Catalog — stubs ──────────────────────────────
+
+  async getLabels(): Promise<Label[]> {
+    throw new Error('getLabels not yet implemented in baileys adapter');
+  }
+
+  async getLabelById(labelId: string): Promise<Label | null> {
+    throw new Error('getLabelById not yet implemented in baileys adapter');
+  }
+
+  async getChatLabels(chatId: string): Promise<Label[]> {
+    throw new Error('getChatLabels not yet implemented in baileys adapter');
+  }
+
+  async addLabelToChat(chatId: string, labelId: string): Promise<void> {
+    throw new Error('addLabelToChat not yet implemented in baileys adapter');
+  }
+
+  async removeLabelFromChat(chatId: string, labelId: string): Promise<void> {
+    throw new Error('removeLabelFromChat not yet implemented in baileys adapter');
+  }
+
+  async getSubscribedChannels(): Promise<Channel[]> {
+    throw new Error('getSubscribedChannels not yet implemented in baileys adapter');
+  }
+
+  async getChannelById(channelId: string): Promise<Channel | null> {
+    throw new Error('getChannelById not yet implemented in baileys adapter');
+  }
+
+  async subscribeToChannel(inviteCode: string): Promise<Channel> {
+    throw new Error('subscribeToChannel not yet implemented in baileys adapter');
+  }
+
+  async unsubscribeFromChannel(channelId: string): Promise<void> {
+    throw new Error('unsubscribeFromChannel not yet implemented in baileys adapter');
+  }
+
+  async getChannelMessages(channelId: string, limit?: number): Promise<ChannelMessage[]> {
+    throw new Error('getChannelMessages not yet implemented in baileys adapter');
+  }
+
+  async getContactStatuses(): Promise<Status[]> {
+    throw new Error('getContactStatuses not yet implemented in baileys adapter');
+  }
+
+  async getContactStatus(contactId: string): Promise<Status[]> {
+    throw new Error('getContactStatus not yet implemented in baileys adapter');
+  }
+
+  async postTextStatus(text: string, options?: TextStatusOptions): Promise<StatusResult> {
+    throw new Error('postTextStatus not yet implemented in baileys adapter');
+  }
+
+  async postImageStatus(media: MediaInput, caption?: string): Promise<StatusResult> {
+    throw new Error('postImageStatus not yet implemented in baileys adapter');
+  }
+
+  async postVideoStatus(media: MediaInput, caption?: string): Promise<StatusResult> {
+    throw new Error('postVideoStatus not yet implemented in baileys adapter');
+  }
+
+  async deleteStatus(statusId: string): Promise<void> {
+    throw new Error('deleteStatus not yet implemented in baileys adapter');
+  }
+
+  async getCatalog(): Promise<Catalog | null> {
+    throw new Error('getCatalog not yet implemented in baileys adapter');
+  }
+
+  async getProducts(options?: ProductQueryOptions): Promise<PaginatedProducts> {
+    throw new Error('getProducts not yet implemented in baileys adapter');
+  }
+
+  async getProduct(productId: string): Promise<Product | null> {
+    throw new Error('getProduct not yet implemented in baileys adapter');
+  }
+
+  async sendProduct(chatId: string, productId: string, body?: string): Promise<MessageResult> {
+    throw new Error('sendProduct not yet implemented in baileys adapter');
+  }
+
+  async sendCatalog(chatId: string, body?: string): Promise<MessageResult> {
+    throw new Error('sendCatalog not yet implemented in baileys adapter');
+  }
+}

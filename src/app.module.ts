@@ -2,6 +2,7 @@ import { Module, DynamicModule, Type } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { ScheduleModule } from '@nestjs/schedule';
 import configuration from './config/configuration';
 import { SessionModule } from './modules/session/session.module';
 import { MessageModule } from './modules/message/message.module';
@@ -137,6 +138,7 @@ if (process.env.QUEUE_ENABLED === 'true') {
     // Core modules
     HooksModule, // Global hook system for plugin integration
     PluginsModule, // Global plugin system
+    ScheduleModule.forRoot(), // @Cron decorators
     LoggerModule,
     CacheModule,
     StorageModule,

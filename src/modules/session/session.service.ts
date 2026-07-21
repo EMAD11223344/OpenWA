@@ -221,12 +221,14 @@ export class SessionService implements OnModuleDestroy, OnModuleInit {
       throw new BadRequestException('Session is already started');
     }
 
-    // Guard against launching too many Chromium instances at once (OOM risk on
-    // small hosts). MAX_CONCURRENT_SESSIONS can be overridden via env.
-    const maxConcurrent = parseInt(process.env.MAX_CONCURRENT_SESSIONS || '3', 10);
-    if (this.engines.size >= maxConcurrent) {
+    // Memory-aware limits are enforced by the EngineWatchdog (which can also
+    // cull the oldest non-ready session if RSS pressure approaches the cap).
+    // BAILEYS_MAX_SESSIONS (default 0 = unbounded) is the only hard knob; only
+    // honoured when explicitly set to a positive integer.
+    const maxConcurrent = parseInt(process.env.BAILEYS_MAX_SESSIONS ?? '0', 10);
+    if (maxConcurrent > 0 && this.engines.size >= maxConcurrent) {
       throw new BadRequestException(
-        `Maximum concurrent sessions (${maxConcurrent}) reached. Stop another session before starting a new one.`,
+        `BAILEYS_MAX_SESSIONS=${maxConcurrent} reached. Stop another session or raise the limit.`,
       );
     }
 
@@ -265,10 +267,18 @@ export class SessionService implements OnModuleDestroy, OnModuleInit {
 
     const engine = this.engineFactory.create({
       sessionId: session.name,
+      engineType:
+        typeof session.config?.engine === 'string' ? (session.config.engine as string) : undefined,
       proxyUrl: session.proxyUrl || undefined,
       proxyType: session.proxyType || undefined,
     });
     this.engines.set(id, engine);
+    const engineType =
+      typeof session.config?.engine === 'string'
+        ? (session.config.engine as string)
+        : 'whatsapp-web.js';
+    this.engineMeta.set(id, { sessionName: session.name, engineType });
+    this.engineActiveSince.set(id, new Date().toISOString());
 
     await engine.initialize({
       onQRCode: (): void => {
@@ -374,6 +384,7 @@ export class SessionService implements OnModuleDestroy, OnModuleInit {
         this.scheduleReconnect(id, session);
       },
       onStateChanged: (engineState: EngineStatus): void => {
+        this.markEngineState(id);
         const statusMap: Record<EngineStatus, SessionStatus> = {
           [EngineStatus.DISCONNECTED]: SessionStatus.DISCONNECTED,
           [EngineStatus.INITIALIZING]: SessionStatus.INITIALIZING,
@@ -453,6 +464,81 @@ export class SessionService implements OnModuleDestroy, OnModuleInit {
       state.timer = null;
     }
     this.reconnectStates.delete(id);
+  }
+
+  /**
+   * Tracks state-change timestamps + metadata for active engines, used by
+   * EngineWatchdog and dashboards.
+   *   - engineActiveSince  → ISO timestamp of last observed status change
+   *   - engineMeta         → { sessionName, engineType } at create time
+   */
+  private readonly engineActiveSince = new Map<string, string>();
+  private readonly engineMeta = new Map<
+    string,
+    { sessionName: string; engineType: string }
+  >();
+
+  /**
+   * Public hook for the EngineWatchdog and dashboard. Never throws.
+   */
+  public getActiveEngineSnapshot(): Array<{
+    id: string;
+    sessionName: string;
+    engineType: string;
+    status: EngineStatus;
+    sinceMs: number;
+  }> {
+    const now = Date.now();
+    const out: Array<{
+      id: string;
+      sessionName: string;
+      engineType: string;
+      status: EngineStatus;
+      sinceMs: number;
+    }> = [];
+
+    for (const [id, engine] of this.engines) {
+      const status = engine.getStatus();
+      const sinceRaw = this.engineActiveSince.get(id);
+      const sinceMs = sinceRaw ? now - new Date(sinceRaw).getTime() : 0;
+      const meta = this.engineMeta.get(id);
+
+      out.push({
+        id,
+        sessionName: meta?.sessionName ?? id,
+        engineType: meta?.engineType ?? 'unknown',
+        status,
+        sinceMs,
+      });
+    }
+    return out;
+  }
+
+  /**
+   * Public hook for the EngineWatchdog. Destroys and re-initializes the engine.
+   */
+  public async restartEngine(id: string): Promise<void> {
+    const session = await this.findOne(id);
+    if (!session) return;
+
+    const existing = this.engines.get(id);
+    if (existing) {
+      try {
+        await existing.destroy();
+      } catch (err) {
+        this.logger.warn(`Watchdog restart: destroy failed for ${id}: ${String(err)}`);
+      }
+      this.engines.delete(id);
+    }
+    this.engineActiveSince.set(id, new Date().toISOString());
+    await this.initializeEngine(id, session);
+  }
+
+  /**
+   * Tracks engine entry state changes reported via onStateChanged.
+   */
+  public markEngineState(id: string): void {
+    this.engineActiveSince.set(id, new Date().toISOString());
   }
 
   async stop(id: string): Promise<Session> {

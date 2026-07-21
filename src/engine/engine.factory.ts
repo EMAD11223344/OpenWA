@@ -8,6 +8,12 @@ import { createLogger } from '../common/services/logger.service';
 
 export interface EngineCreateOptions {
   sessionId: string;
+  /**
+   * Optional per-session override for engine type. If unset, falls back to the
+   * global `engine.type` env / config setting. Allows one Space to host both
+   * whatsapp-web.js and baileys sessions side-by-side during migration.
+   */
+  engineType?: string;
   proxyUrl?: string;
   proxyType?: 'http' | 'https' | 'socks4' | 'socks5';
 }
@@ -15,13 +21,13 @@ export interface EngineCreateOptions {
 @Injectable()
 export class EngineFactory implements OnModuleInit {
   private readonly logger = createLogger('EngineFactory');
-  private readonly engineType: string;
+  private readonly defaultEngineType: string;
 
   constructor(
     private readonly configService: ConfigService,
     private readonly pluginLoader: PluginLoaderService,
   ) {
-    this.engineType = this.configService.get<string>('engine.type') ?? 'whatsapp-web.js';
+    this.defaultEngineType = this.configService.get<string>('engine.type') ?? 'whatsapp-web.js';
   }
 
   async onModuleInit(): Promise<void> {
@@ -44,16 +50,43 @@ export class EngineFactory implements OnModuleInit {
     const wwjsPlugin = new WhatsAppWebJsPlugin();
     this.pluginLoader.registerBuiltInPlugin(wwjsManifest, wwjsPlugin);
 
-    // Auto-enable the configured engine
+    // Register Baileys as built-in plugin (no-op until `engineType=baileys`
+    // is selected via env or per-session override).
     try {
-      await this.pluginLoader.enablePlugin(this.engineType);
-      this.logger.log(`Engine plugin enabled: ${this.engineType}`, {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { BaileysPlugin } = require('../plugins/engines/baileys') as {
+        BaileysPlugin: { new (): unknown };
+      };
+      const baileysPlugin = new BaileysPlugin();
+      const baileysManifest =
+        (require('../plugins/engines/baileys/manifest.json') as PluginManifest) ||
+        ({
+          id: 'baileys',
+          name: 'Baileys Engine',
+          version: '1.0.0',
+          type: PluginType.ENGINE,
+          description: 'Pure WebSocket WhatsApp engine (no Chromium)',
+          main: 'index.ts',
+          provides: ['whatsapp-engine'],
+        } as PluginManifest);
+      this.pluginLoader.registerBuiltInPlugin(baileysManifest, baileysPlugin as never);
+    } catch (err) {
+      this.logger.warn(
+        `Skipping baileys plugin registration (not yet available): ${String(err)}`,
+        { action: 'baileys_register_skipped' },
+      );
+    }
+
+    // Auto-enable the default engine
+    try {
+      await this.pluginLoader.enablePlugin(this.defaultEngineType);
+      this.logger.log(`Engine plugin enabled: ${this.defaultEngineType}`, {
         action: 'engine_enabled',
-        engineType: this.engineType,
+        engineType: this.defaultEngineType,
       });
     } catch (error) {
       this.logger.error(
-        `Failed to enable engine plugin: ${this.engineType}`,
+        `Failed to enable engine plugin: ${this.defaultEngineType}`,
         error instanceof Error ? error.message : String(error),
         { action: 'engine_enable_failed' },
       );
@@ -61,8 +94,10 @@ export class EngineFactory implements OnModuleInit {
   }
 
   create(options: EngineCreateOptions): IWhatsAppEngine {
+    const engineType = options.engineType || this.defaultEngineType;
+
     // Try to get engine from plugin system
-    const enginePlugin = this.pluginLoader.getPlugin(this.engineType);
+    const enginePlugin = this.pluginLoader.getPlugin(engineType);
 
     if (enginePlugin?.instance && this.isEnginePlugin(enginePlugin.instance)) {
       return enginePlugin.instance.createEngine({
@@ -72,8 +107,28 @@ export class EngineFactory implements OnModuleInit {
       }) as IWhatsAppEngine;
     }
 
+    // Special-case: baileys wasn't registered (module missing). Fall back to
+    // the direct constructor path if executable.
+    if (engineType === 'baileys') {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { BaileysAdapter } = require('../engine/adapters/baileys.adapter') as {
+          BaileysAdapter: { new (cfg: unknown): IWhatsAppEngine };
+        };
+        const dataDir =
+          (this.configService.get<string>('dataDatabase.database') ?? './data') + '/sessions';
+        return new BaileysAdapter({
+          sessionId: options.sessionId,
+          authDir: dataDir + '/' + options.sessionId,
+        });
+      } catch (err) {
+        this.logger.error(`BaileysPlugin.requested but BaileysAdapter not built: ${String(err)}`);
+        throw err;
+      }
+    }
+
     // Fallback to direct adapter creation (legacy support)
-    this.logger.warn(`Engine plugin ${this.engineType} not available, using fallback`, {
+    this.logger.warn(`Engine plugin ${engineType} not available, using fallback`, {
       action: 'engine_fallback',
     });
 
@@ -129,6 +184,6 @@ export class EngineFactory implements OnModuleInit {
   }
 
   getCurrentEngine(): string {
-    return this.engineType;
+    return this.defaultEngineType;
   }
 }

@@ -1,0 +1,33 @@
+{
+    "id": "baileys",
+    "name": "Baileys Engine",
+    "version": "1.0.0",
+    "type": "engine",
+    "description": "Pure WebSocket WhatsApp engine via @whiskeysockets/baileys. No browser, no Chromium. Recommended for containerised / serverless / free-tier hosts.",
+    "author": "OpenWA Team",
+    "main": "index.ts",
+    "provides": [
+        "whatsapp-engine",
+        "text-messages",
+        "media-messages",
+        "group-management",
+        "low-memory"
+    ],
+    "configSchema": {
+        "type": "object",
+        "properties": {
+            "authDir": {
+                "type": "string",
+                "title": "Auth State Directory",
+                "description": "Directory to persist Baileys credentials (creds.json). Defaults to the session data path.",
+                "default": "./data/sessions"
+            },
+            "printQR": {
+                "type": "boolean",
+                "title": "Print QR in Terminal",
+                "description": "Print QR code to container logs (for debug / first-time pairing via SSH).",
+                "default": false
+            }
+        }
+    }
+}
