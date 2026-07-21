@@ -94,6 +94,23 @@ export default function Plugins() {
     }
   };
 
+  const handleSwitchEngine = async (engineType: string) => {
+    setActionLoading(engineType);
+    try {
+      const result = await pluginsApi.switchEngine(engineType);
+      if (result.success) {
+        toast.success('Engine Switched', result.message);
+        refetchAll();
+      } else {
+        toast.error('Switch Failed', result.message);
+      }
+    } catch (err) {
+      toast.error('Switch Failed', err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   const handleHealthCheck = async (pluginId: string) => {
     setActionLoading(pluginId);
     try {
@@ -189,15 +206,34 @@ export default function Plugins() {
             </div>
           </div>
         )}
+
+        {engines.length > 1 && (
+          <div className="engine-switch-bar">
+            <span className="engine-switch-label">Switch engine:</span>
+            {engines.map(engine => (
+              <button
+                key={engine.id}
+                className={`engine-switch-btn ${engine.id === currentEngine ? 'active' : ''}`}
+                onClick={() => handleSwitchEngine(engine.id)}
+                disabled={engine.id === currentEngine || actionLoading === engine.id}
+              >
+                {engine.name}
+                {engine.id === currentEngine && ' (active)'}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="plugins-grid">
         {plugins.map(plugin => {
           const TypeIcon = pluginTypeIcons[plugin.type as PluginType] || Puzzle;
           const isLoading = actionLoading === plugin.id;
+          const isActiveEngine = plugin.type === 'engine' && plugin.id === currentEngine;
+          const isEnginePlugin = plugin.type === 'engine';
 
           return (
-            <div key={plugin.id} className="plugin-card">
+            <div key={plugin.id} className={`plugin-card ${isActiveEngine ? 'active-engine' : ''}`}>
               <div className={`plugin-card-header type-${plugin.type}`}>
                 <div className="plugin-info">
                   <div className="plugin-icon-wrapper">
@@ -208,7 +244,10 @@ export default function Plugins() {
                     <span className="plugin-version">v{plugin.version}</span>
                   </div>
                 </div>
-                {plugin.builtIn && <span className="plugin-builtin-badge">{t('plugins.builtIn')}</span>}
+                <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                  {isActiveEngine && <span className="plugin-active-badge">Currently Active</span>}
+                  {plugin.builtIn && <span className="plugin-builtin-badge">{t('plugins.builtIn')}</span>}
+                </div>
               </div>
 
               <div className="plugin-card-body">
@@ -239,45 +278,28 @@ export default function Plugins() {
                 )}
 
                 <div className="plugin-actions">
-                  {plugin.type === 'engine' ? (
-                    (() => {
-                      const enginePlugins = plugins.filter(p => p.type === 'engine');
-                      const isOnlyEngine = enginePlugins.length === 1;
-                      const isActive = plugin.status === 'enabled';
-
-                      if (isOnlyEngine && isActive) {
-                        return (
-                          <span className="btn-required">
-                            <CheckCircle size={16} />
-                            {t('plugins.required')}
-                          </span>
-                        );
-                      } else if (isActive) {
-                        return (
-                          <span className="btn-active">
-                            <CheckCircle size={16} />
-                            {t('plugins.active')}
-                          </span>
-                        );
-                      } else {
-                        return (
-                          <button
-                            onClick={() => handleToggle(plugin)}
-                            disabled={isLoading}
-                            className="btn-toggle enable"
-                          >
-                            {isLoading ? (
-                              <Loader2 size={16} className="animate-spin" />
-                            ) : (
-                              <>
-                                <Power size={16} />
-                                {t('plugins.activate')}
-                              </>
-                            )}
-                          </button>
-                        );
-                      }
-                    })()
+                  {isEnginePlugin ? (
+                    isActiveEngine ? (
+                      <span className="btn-active">
+                        <CheckCircle size={16} />
+                        Currently Active
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => handleSwitchEngine(plugin.id)}
+                        disabled={isLoading}
+                        className="btn-toggle enable"
+                      >
+                        {isLoading ? (
+                          <Loader2 size={16} className="animate-spin" />
+                        ) : (
+                          <>
+                            <Zap size={16} />
+                            Set as Active
+                          </>
+                        )}
+                      </button>
+                    )
                   ) : (
                     <button
                       onClick={() => handleToggle(plugin)}

@@ -203,6 +203,23 @@ export class InfraController {
     return { engineType: this.engineFactory.getCurrentEngine() };
   }
 
+  @Post('engines/switch')
+  @ApiOperation({ summary: 'Switch active engine at runtime' })
+  @ApiResponse({ status: 200, description: 'Engine switched' })
+  @ApiBody({ schema: { properties: { engineType: { type: 'string', enum: ['whatsapp-web.js', 'baileys'] } } } })
+  switchEngine(@Body() body: { engineType: string }): { success: boolean; engineType: string; message: string } {
+    const { engineType } = body;
+    if (engineType !== 'whatsapp-web.js' && engineType !== 'baileys') {
+      return { success: false, engineType: this.engineFactory.getCurrentEngine(), message: `Unknown engine: ${engineType}` };
+    }
+    this.engineFactory.setDefaultEngine(engineType);
+    return {
+      success: true,
+      engineType,
+      message: `Engine switched to ${engineType}. New sessions will use this engine. Existing sessions are unaffected until restarted.`,
+    };
+  }
+
   @Put('config')
   @ApiOperation({ summary: 'Save infrastructure configuration to .env file' })
   @ApiResponse({ status: 200, description: 'Configuration saved' })

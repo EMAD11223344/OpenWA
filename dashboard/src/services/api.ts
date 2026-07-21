@@ -390,4 +390,10 @@ export const pluginsApi = {
   healthCheck: (id: string) => request<{ healthy: boolean; message?: string }>(`/plugins/${id}/health`),
   getEngines: () => request<Engine[]>('/infra/engines'),
   getCurrentEngine: () => request<{ engineType: string }>('/infra/engines/current'),
+  switchEngine: (engineType: string) =>
+    request<{ success: boolean; engineType: string; message: string }>('/infra/engines/switch', {
+      method: 'POST',
+      body: JSON.stringify({ engineType }),
+      headers: { 'Content-Type': 'application/json' },
+    }),
 };

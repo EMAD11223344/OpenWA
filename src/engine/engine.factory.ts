@@ -21,7 +21,7 @@ export interface EngineCreateOptions {
 @Injectable()
 export class EngineFactory implements OnModuleInit {
   private readonly logger = createLogger('EngineFactory');
-  private readonly defaultEngineType: string;
+  private defaultEngineType: string;
 
   constructor(
     private readonly configService: ConfigService,
@@ -183,5 +183,13 @@ export class EngineFactory implements OnModuleInit {
 
   getCurrentEngine(): string {
     return this.defaultEngineType;
+  }
+
+  setDefaultEngine(engineType: string): void {
+    this.defaultEngineType = engineType;
+    this.logger.log(`Default engine changed to: ${engineType}`, {
+      action: 'engine_switched',
+      engineType,
+    });
   }
 }
