@@ -105,27 +105,38 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
     // Persist creds every time they're updated (multi-device rekey etc.)
     state.creds?.id && this.logger.log(`Auth state loaded for ${this.sessionId}`);
 
-    // Create the socket
+    // Fetch latest version or fallback
+    let version: [number, number, number] = [2, 3000, 1017531287];
+    try {
+      const versionRes = await this.B.fetchLatestBaileysVersion();
+      if (versionRes?.version) {
+        version = versionRes.version;
+        this.logger.log(`Using latest Baileys WA version: ${version.join('.')}`);
+      }
+    } catch (err) {
+      this.logger.warn(`Failed to fetch latest Baileys version, using fallback: ${String(err)}`);
+    }
+
+    const browserTuple = this.B.Browsers?.ubuntu('Chrome') ?? ['Ubuntu', 'Chrome', '20.0.04'];
+
+    // Create the socket with valid 3-string browser tuple
     this.socket = this.B.makeWASocket({
       auth: state,
+      version,
+      browser: browserTuple,
       printQRInTerminal: this.printQR,
-      // Memory-safe defaults for constrained hosts
-      browser: {
-        clientId: this.sessionId,
-        name: 'OpenWA',
-        version: [2, 3000, 102376601],
-      },
-      // Mark as a Linked Device (same as WhatsApp Web)
       markOnlineOnConnect: false,
-      // Reduce memory: don't sync full history on first connect
       syncFullHistory: false,
-      // Connection retry
       connectTimeoutMs: 60_000,
       retryRequestDelayMs: 2_000,
-      maxRetries: 3,
-      // Don't generate QR in terminal by default (controlled via printQR)
+      maxRetries: 5,
       generateHighQualityLinkPreview: false,
-      // Proxy support
+      options: {
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        },
+      },
       ...(this.getProxyConfig()),
     });
 
