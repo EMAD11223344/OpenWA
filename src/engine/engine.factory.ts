@@ -27,7 +27,7 @@ export class EngineFactory implements OnModuleInit {
     private readonly configService: ConfigService,
     private readonly pluginLoader: PluginLoaderService,
   ) {
-    this.defaultEngineType = this.configService.get<string>('engine.type') ?? 'whatsapp-web.js';
+    this.defaultEngineType = this.configService.get<string>('engine.type') ?? 'baileys';
   }
 
   async onModuleInit(): Promise<void> {
