@@ -259,39 +259,24 @@ export class SessionService implements OnModuleDestroy, OnModuleInit {
   }
 
   private async initializeEngine(id: string, session: Session): Promise<void> {
-    // Resolve proxy URL — per-session override takes precedence, otherwise fall
-    // back to global WHATSAPP_PROXY_URL env (useful when an entire HF Space is
-    // deployed on a blocked IP and every new session must route through the
-    // residential proxy).
-    const envProxyUrl = process.env.WHATSAPP_PROXY_URL || process.env.HF_PROXY_URL || null;
-    const envProxyType = (process.env.WHATSAPP_PROXY_TYPE || 'http') as
-      | 'http'
-      | 'https'
-      | 'socks4'
-      | 'socks5';
-    const resolvedProxyUrl = session.proxyUrl || envProxyUrl || undefined;
-    const resolvedProxyType = session.proxyType || (envProxyUrl ? envProxyType : undefined);
-
     this.logger.log(`Initializing engine for session: ${session.name}`, {
       sessionId: id,
       action: 'engine_init',
-      proxyEnabled: !!resolvedProxyUrl,
+      proxyEnabled: !!session.proxyUrl,
     });
 
     const engine = this.engineFactory.create({
       sessionId: session.name,
       engineType:
         typeof session.config?.engine === 'string' ? (session.config.engine as string) : undefined,
-      proxyUrl: resolvedProxyUrl,
-      proxyType: resolvedProxyType,
+      proxyUrl: session.proxyUrl || undefined,
+      proxyType: session.proxyType || undefined,
     });
     this.engines.set(id, engine);
-    // Engine meta mirrors the actual engine that was selected (per-session
-    // override > env config > factory default of 'baileys').
     const engineType =
       typeof session.config?.engine === 'string'
         ? (session.config.engine as string)
-        : this.engineFactory.getCurrentEngine();
+        : 'whatsapp-web.js';
     this.engineMeta.set(id, { sessionName: session.name, engineType });
     this.engineActiveSince.set(id, new Date().toISOString());
 

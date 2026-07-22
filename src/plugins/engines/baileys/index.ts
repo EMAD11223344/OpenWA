@@ -43,18 +43,11 @@ export class BaileysPlugin implements IEnginePlugin {
       (config.printQR as boolean) ??
       (this.context?.config.printQR as boolean) ??
       false;
-    // Forward proxy settings so Baileys' WebSocket + TLS handshake route
-    // through a residential proxy when the host IP is blocked by WhatsApp.
-    const proxyUrl = (config.proxyUrl as string | undefined) ?? undefined;
-    const proxyType =
-      (config.proxyType as 'http' | 'https' | 'socks4' | 'socks5' | undefined) ?? undefined;
 
     return new BaileysAdapter({
       sessionId,
       authDir,
       printQR,
-      proxyUrl,
-      proxyType,
     });
   }
 
