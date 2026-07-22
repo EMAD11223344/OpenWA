@@ -276,7 +276,7 @@ export class SessionService implements OnModuleDestroy, OnModuleInit {
     const engineType =
       typeof session.config?.engine === 'string'
         ? (session.config.engine as string)
-        : 'whatsapp-web.js';
+        : this.engineFactory.getCurrentEngine();
     this.engineMeta.set(id, { sessionName: session.name, engineType });
     this.engineActiveSince.set(id, new Date().toISOString());
 
