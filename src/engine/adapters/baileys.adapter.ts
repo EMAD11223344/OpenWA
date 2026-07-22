@@ -54,6 +54,8 @@ export interface BaileysAdapterConfig {
  */
 export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
   private socket: any = null;
+  private store: any = null;
+  private storeSaveInterval: any = null;
   private status: EngineStatus = EngineStatus.DISCONNECTED;
   private qrCode: string | null = null;
   private phoneNumber: string | null = null;
@@ -99,6 +101,27 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
     // Ensure auth directory exists
     await fs.mkdir(this.authDir, { recursive: true });
 
+    // Initialize in-memory store for contacts, chats, and message history
+    const storePath = path.join(this.authDir, 'baileys_store.json');
+    if (typeof this.B.makeInMemoryStore === 'function') {
+      this.store = this.B.makeInMemoryStore({
+        logger: this.B.P?.({ level: 'silent' }),
+      });
+      try {
+        this.store.readFromFile(storePath);
+      } catch {
+        // file doesn't exist yet
+      }
+
+      this.storeSaveInterval = setInterval(() => {
+        try {
+          this.store?.writeToFile(storePath);
+        } catch {
+          // ignore
+        }
+      }, 10_000);
+    }
+
     // Load or create auth state
     let { state, saveCreds } = await this.B.useMultiFileAuthState(this.authDir);
 
@@ -139,7 +162,7 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
       browser: browserTuple,
       printQRInTerminal: this.printQR,
       markOnlineOnConnect: false,
-      syncFullHistory: false,
+      syncFullHistory: true,
       generateHighQualityLinkPreview: false,
       connectTimeoutMs: 60_000,
       retryRequestDelayMs: 2_000,
@@ -164,6 +187,11 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
 
     // Create the socket
     this.socket = this.B.makeWASocket(socketConfig);
+
+    // Bind in-memory store to socket event emitter
+    if (this.store) {
+      this.store.bind(this.socket.ev);
+    }
 
     this.setupEventHandlers();
     this.logger.log(`Baileys socket created for session ${this.sessionId}`);
@@ -654,7 +682,7 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
 
   async getContacts(): Promise<Contact[]> {
     this.ensureReady();
-    const storeContacts = this.socket?.store?.contacts ?? {};
+    const storeContacts = this.store?.contacts ?? this.socket?.store?.contacts ?? {};
     return Object.entries(storeContacts).map(([id, data]: [string, any]) => ({
       id,
       name: data.name ?? data.notify ?? undefined,
@@ -669,7 +697,7 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
   async getContactById(contactId: string): Promise<Contact | null> {
     this.ensureReady();
     const resolved = this.resolveJid(contactId);
-    const storeContacts = this.socket?.store?.contacts ?? {};
+    const storeContacts = this.store?.contacts ?? this.socket?.store?.contacts ?? {};
     const data = storeContacts[resolved];
     if (!data) {
       // Try to fetch from server
@@ -738,12 +766,21 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
 
   async getGroups(): Promise<Group[]> {
     this.ensureReady();
-    const storeGroups = this.socket?.store?.groupMetadata ?? {};
-    return Object.entries(storeGroups).map(([id, meta]: [string, any]) => ({
-      id,
-      name: meta.subject ?? 'Unknown Group',
-      participantsCount: meta.participants?.length ?? 0,
-    }));
+    try {
+      const groupsMap = await this.socket!.groupFetchAllParticipating();
+      return Object.entries(groupsMap).map(([id, meta]: [string, any]) => ({
+        id,
+        name: meta.subject ?? 'Unknown Group',
+        participantsCount: meta.participants?.length ?? 0,
+      }));
+    } catch {
+      const storeGroups = this.store?.groupMetadata ?? this.socket?.store?.groupMetadata ?? {};
+      return Object.entries(storeGroups).map(([id, meta]: [string, any]) => ({
+        id,
+        name: meta.subject ?? 'Unknown Group',
+        participantsCount: meta.participants?.length ?? 0,
+      }));
+    }
   }
 
   // ─── Groups: Extended (Phase 3) ─────────────────────────────────────────────
