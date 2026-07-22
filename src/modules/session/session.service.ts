@@ -273,10 +273,12 @@ export class SessionService implements OnModuleDestroy, OnModuleInit {
       proxyType: session.proxyType || undefined,
     });
     this.engines.set(id, engine);
+    // Engine meta mirrors the actual engine that was selected (per-session
+    // override > env config > factory default of 'baileys').
     const engineType =
       typeof session.config?.engine === 'string'
         ? (session.config.engine as string)
-        : 'whatsapp-web.js';
+        : this.engineFactory.getCurrentEngine();
     this.engineMeta.set(id, { sessionName: session.name, engineType });
     this.engineActiveSince.set(id, new Date().toISOString());
 

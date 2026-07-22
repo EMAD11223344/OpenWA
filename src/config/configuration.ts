@@ -47,7 +47,9 @@ export default () => ({
 
   // WhatsApp engine configuration
   engine: {
-    type: process.env.ENGINE_TYPE || 'whatsapp-web.js',
+    // Default is 'baileys' — pure WebSocket engine, lower memory, fits HF free-tier.
+    // Override with ENGINE_TYPE=whatsapp-web.js only if you need the legacy Chromium engine.
+    type: process.env.ENGINE_TYPE || 'baileys',
     puppeteer: {
       headless: process.env.PUPPETEER_HEADLESS !== 'false',
       args: (process.env.PUPPETEER_ARGS || '--no-sandbox,--disable-setuid-sandbox').split(','),

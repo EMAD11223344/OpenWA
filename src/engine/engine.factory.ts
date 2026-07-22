@@ -118,6 +118,8 @@ export class EngineFactory implements OnModuleInit {
         return new BaileysAdapter({
           sessionId: options.sessionId,
           authDir: dataDir + '/' + options.sessionId,
+          proxyUrl: options.proxyUrl ?? undefined,
+          proxyType: options.proxyType ?? undefined,
         });
       } catch (err) {
         this.logger.error(`BaileysPlugin.requested but BaileysAdapter not built: ${String(err)}`);
