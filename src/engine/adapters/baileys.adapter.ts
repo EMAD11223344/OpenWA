@@ -133,7 +133,7 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
 
     const browserTuple = this.B.Browsers?.ubuntu('Chrome') ?? ['Ubuntu', 'Chrome', '20.0.04'];
 
-    // Create the socket with valid 3-string browser tuple and IPv4 Agent
+    // Create the socket with valid 3-string browser tuple, IPv4 Agent, and wsOptions
     this.socket = this.B.makeWASocket({
       auth: state,
       version,
@@ -142,17 +142,27 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
       markOnlineOnConnect: false,
       syncFullHistory: false,
       connectTimeoutMs: 30_000,
+      keepAliveIntervalMs: 15_000,
       retryRequestDelayMs: 2_000,
       maxRetries: 5,
       generateHighQualityLinkPreview: false,
       agent: httpsAgent,
-      fetch: (url: string, init?: any) => fetch(url, { ...init, agent: httpsAgent }),
-      options: {
+      wsOptions: {
         agent: httpsAgent,
         headers: {
           'User-Agent':
             'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
           'Origin': 'https://web.whatsapp.com',
+          'Host': 'web.whatsapp.com',
+        },
+        origin: 'https://web.whatsapp.com',
+        handshakeTimeout: 15000,
+      },
+      options: {
+        agent: httpsAgent,
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
         },
       },
       ...(this.getProxyConfig()),
