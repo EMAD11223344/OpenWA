@@ -142,7 +142,18 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
     });
 
     this.setupEventHandlers();
-    this.logger.log(`Baileys socket created for session ${this.sessionId}`);
+    this.logger.log(`Baileys socket created for session ${this.sessionId}`, {
+      sessionId: this.sessionId,
+      proxyEnabled: !!this.proxyUrl,
+      proxyType: this.proxyUrl ? this.proxyType : undefined,
+      connectTimeoutMs: 60_000,
+    });
+    if (!this.proxyUrl) {
+      this.logger.warn(
+        `No proxy configured for session ${this.sessionId}. If QR codes never appear, set WHATSAPP_PROXY_URL env or per-session proxyUrl — WhatsApp blocks TLS handshakes from datacenter IP ranges (HF/AWS/GCP).`,
+        { sessionId: this.sessionId, action: 'proxy_missing_hint' },
+      );
+    }
   }
 
   async disconnect(): Promise<void> {
@@ -315,24 +326,30 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
 
       if (connection === 'close') {
         const statusCode = lastDisconnect?.error?.output?.statusCode;
+        const message: string = lastDisconnect?.error?.message ?? '';
+        const reasonText =
+          `code=${statusCode ?? 'unknown'} message=${message.slice(0, 200)}`.slice(0, 250);
         // DisconnectReason 401 = logged out / unauthorized
         if (statusCode === 401) {
           this.setStatus(EngineStatus.FAILED);
-          this.callbacks.onDisconnected?.('Logged out — re-pair required');
+          this.callbacks.onDisconnected?.(`Logged out — re-pair required (${reasonText})`);
           return;
         }
-        // DisconnectReason 408 = request timeout (network issue)
-        // DisconnectReason 428 = connection closed (try reconnect)
         // DisconnectReason 440 = connection replaced (logged in elsewhere)
-        // DisconnectReason 515 = restart required
         if (statusCode === 440) {
           this.setStatus(EngineStatus.FAILED);
-          this.callbacks.onDisconnected?.('Connection replaced by another device');
+          this.callbacks.onDisconnected?.(`Connection replaced by another device (${reasonText})`);
           return;
         }
         // All other codes: transient disconnect — let baileys retry automatically
+        // but log the actual reason so HF datacenter blocks (SSL alert 0) are visible.
+        this.logger.warn(`Connection closed (${reasonText})`, {
+          sessionId: this.sessionId,
+          proxyEnabled: !!this.proxyUrl,
+          action: 'connection_closed',
+        });
         this.setStatus(EngineStatus.DISCONNECTED);
-        this.callbacks.onDisconnected?.(`Connection closed (code=${statusCode ?? 'unknown'})`);
+        this.callbacks.onDisconnected?.(`Connection closed (${reasonText})`);
       }
 
       if (connection === 'connecting') {
