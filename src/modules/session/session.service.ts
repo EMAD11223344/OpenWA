@@ -382,14 +382,15 @@ export class SessionService implements OnModuleDestroy, OnModuleInit {
         );
 
         // Detect persistent network/SSL failures that won't resolve by retrying.
-        // Code 408 = request timeout; on HF data centers this means WhatsApp
-        // rejected the WebSocket TLS handshake (SSL alert 0). Reconnecting
-        // endlessly just wastes resources. Mark as FAILED so the user sees
-        // a clear error instead of an infinite reconnect loop.
+        // Code 408 = request timeout; on HF data centers this can mean WhatsApp
+        // rejected the WebSocket TLS handshake (SSL alert 0). We give Baileys
+        // at least 3 reconnect attempts before declaring permanent failure —
+        // a single SSL rejection is too noisy and kills the session before
+        // Baileys' own retry logic has a chance to negotiate.
         const isPermanentFailure = /code=408|SSL|EPROTO|ECONNREFUSED|ENOTFOUND/i.test(reason);
         if (isPermanentFailure) {
           const reconnectState = this.reconnectStates.get(id);
-          if (reconnectState && reconnectState.attempts >= 1) {
+          if (reconnectState && reconnectState.attempts >= 3) {
             this.logger.error(
               `Session ${session.name} has persistent network failure after ${reconnectState.attempts} attempt(s) — marking as FAILED (reason: ${reason})`,
               undefined,
