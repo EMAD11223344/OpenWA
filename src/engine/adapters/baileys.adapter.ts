@@ -100,7 +100,19 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
     await fs.mkdir(this.authDir, { recursive: true });
 
     // Load or create auth state
-    const { state, saveCreds } = await this.B.useMultiFileAuthState(this.authDir);
+    let { state, saveCreds } = await this.B.useMultiFileAuthState(this.authDir);
+
+    // If session is unauthenticated (no registered user ID), clear stale partial credentials
+    // to guarantee Baileys starts completely fresh and emits a new QR code immediately.
+    if (!state.creds?.me?.id && !state.creds?.registered) {
+      this.logger.log(`Session ${this.sessionId} is unauthenticated — resetting auth dir to generate fresh QR.`);
+      await fs.rm(this.authDir, { recursive: true, force: true }).catch(() => {});
+      await fs.mkdir(this.authDir, { recursive: true });
+      const freshAuth = await this.B.useMultiFileAuthState(this.authDir);
+      state = freshAuth.state;
+      saveCreds = freshAuth.saveCreds;
+    }
+
     this.authState = state;
     this.saveCreds = saveCreds;
 
@@ -264,19 +276,22 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
       const { connection, lastDisconnect, qr, loginTimeout } = update;
 
       if (qr) {
-        // Convert raw Baileys QR string to data URL (same format as whatsapp-web.js adapter)
-        // so the frontend <img src={qr}> can render it directly
-        qrcode.toDataURL(qr, (err: Error | null, dataUrl: string) => {
-          if (err) {
-            this.logger.error(`Failed to convert QR to data URL: ${String(err)}`);
-            this.qrCode = qr; // fallback to raw string
-          } else {
+        this.logger.log(`Raw QR event received from Baileys for session ${this.sessionId}`);
+        // Set QR immediately so getQRCode() is populated synchronously
+        this.qrCode = qr;
+        this.setStatus(EngineStatus.QR_READY);
+        this.callbacks.onQRCode?.(qr);
+
+        // Asynchronously render as PNG Data URL for UI display
+        qrcode.toDataURL(qr)
+          .then((dataUrl: string) => {
             this.qrCode = dataUrl;
-          }
-          this.setStatus(EngineStatus.QR_READY);
-          this.callbacks.onQRCode?.(this.qrCode!);
-          this.logger.log(`QR generated for session ${this.sessionId}`);
-        });
+            this.callbacks.onQRCode?.(dataUrl);
+            this.logger.log(`QR DataURL generated & ready for session ${this.sessionId}`);
+          })
+          .catch((err: unknown) => {
+            this.logger.error(`Failed to convert QR to data URL: ${String(err)}`);
+          });
       }
 
       if (connection === 'open') {
