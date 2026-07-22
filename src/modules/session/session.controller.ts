@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Delete, Param, Body, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Param, Body, HttpCode, HttpStatus, Res, NotFoundException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { SessionService } from './session.service';
 import { CreateSessionDto, SessionResponseDto, QRCodeResponseDto } from './dto';
@@ -7,6 +7,7 @@ import { AuditService } from '../audit/audit.service';
 import { AuditAction } from '../audit/entities/audit-log.entity';
 import { RequireRole } from '../auth/decorators/auth.decorators';
 import { ApiKeyRole } from '../auth/entities/api-key.entity';
+import * as fs from 'fs';
 
 @ApiTags('sessions')
 @Controller('sessions')
@@ -183,5 +184,28 @@ export class SessionController {
     memoryUsage: { heapUsed: number; heapTotal: number; rss: number };
   }> {
     return this.sessionService.getStats();
+  }
+
+  @Get(':id/media/:messageId')
+  @ApiOperation({ summary: 'Download persisted media for a message' })
+  @ApiParam({ name: 'id', description: 'Session ID' })
+  @ApiParam({ name: 'messageId', description: 'Message ID (WhatsApp message ID)' })
+  @ApiResponse({ status: 200, description: 'Media file stream' })
+  @ApiResponse({ status: 404, description: 'Media not found' })
+  async getMedia(
+    @Param('id') id: string,
+    @Param('messageId') messageId: string,
+    @Res() res: any,
+  ) {
+    const result = await this.sessionService.getMediaPath(id, messageId);
+    if (!result) {
+      throw new NotFoundException('Media not found');
+    }
+    const stream = fs.createReadStream(result.filePath);
+    res.set({
+      'Content-Type': result.mimeType,
+      'Cache-Control': 'public, max-age=86400',
+    });
+    stream.pipe(res);
   }
 }

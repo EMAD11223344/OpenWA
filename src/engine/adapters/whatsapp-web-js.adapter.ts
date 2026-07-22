@@ -2,6 +2,7 @@ import { EventEmitter } from 'events';
 import { Client, LocalAuth, MessageMedia } from 'whatsapp-web.js';
 import * as qrcode from 'qrcode';
 import * as path from 'path';
+import * as fs from 'fs/promises';
 import {
   IWhatsAppEngine,
   EngineStatus,
@@ -186,6 +187,17 @@ export class WhatsAppWebJsAdapter extends EventEmitter implements IWhatsAppEngin
                 filename: media.filename || undefined,
                 data: media.data,
               };
+              // Persist to disk so Business-OS can proxy it later
+              try {
+                const ext = (media.mimetype?.split('/')[1]?.split(';')[0]) || 'bin';
+                const mediaDir = path.join(this.config.sessionDataPath, 'media');
+                await fs.mkdir(mediaDir, { recursive: true });
+                const filePath = path.join(mediaDir, `${incomingMessage.id}.${ext}`);
+                await fs.writeFile(filePath, Buffer.from(media.data, 'base64'));
+                (incomingMessage as any).mediaUrl = filePath;
+              } catch (persistErr) {
+                this.logger.error('Media persist error', String(persistErr));
+              }
             }
           } catch (error) {
             this.logger.error('Error downloading media', String(error));

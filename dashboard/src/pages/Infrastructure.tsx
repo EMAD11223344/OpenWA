@@ -155,6 +155,8 @@ export function Infrastructure() {
     max: 100,
   });
 
+  const [engineType, setEngineType] = useState<'whatsapp-web.js' | 'baileys'>('baileys');
+
   useEffect(() => {
     if (!infraStatus) return;
 
@@ -182,6 +184,10 @@ export function Infrastructure() {
       messages: infraStatus.queue.messages,
       webhooks: infraStatus.queue.webhooks,
     });
+
+    if (infraStatus.engine?.type) {
+      setEngineType(infraStatus.engine.type as 'whatsapp-web.js' | 'baileys');
+    }
   }, [infraStatus]);
 
   if (loading) {
@@ -216,6 +222,7 @@ export function Infrastructure() {
         redis: { enabled: redisEnabled, ...redisConfig },
         queue: { enabled: queueEnabled },
         storage: { ...storageConfig },
+        engine: { type: engineType },
         server: { ...serverConfig },
         webhook: { ...webhookConfig },
         rateLimit: { ...rateLimitConfig },
@@ -374,6 +381,50 @@ export function Infrastructure() {
                 />
               </div>
             </div>
+          </div>
+        </section>
+
+        {/* WhatsApp Engine */}
+        <section className="infra-card">
+          <div className="card-header">
+            <div className="header-left">
+              <Gauge size={20} />
+              <h2>WhatsApp Engine</h2>
+            </div>
+            <span className={`status-indicator ${engineType === 'baileys' ? 'connected' : 'sqlite'}`}>
+              ● {engineType === 'baileys' ? 'Baileys (WebSocket)' : 'WhatsApp Web.js (Chromium)'}
+            </span>
+          </div>
+
+          <div className="radio-group">
+            <label className={`radio-option ${engineType === 'baileys' ? 'selected' : ''}`}>
+              <input
+                type="radio"
+                name="engineType"
+                checked={engineType === 'baileys'}
+                onChange={() => setEngineType('baileys')}
+              />
+              <span style={{ fontSize: '2rem', opacity: 0.3, position: 'absolute', top: '12px', right: '12px' }}>⚡</span>
+              <span>Baileys</span>
+              <small>Pure WebSocket — lightweight, low memory, fast reconnect. Recommended for most deployments.</small>
+            </label>
+            <label className={`radio-option ${engineType === 'whatsapp-web.js' ? 'selected' : ''}`}>
+              <input
+                type="radio"
+                name="engineType"
+                checked={engineType === 'whatsapp-web.js'}
+                onChange={() => setEngineType('whatsapp-web.js')}
+              />
+              <span style={{ fontSize: '2rem', opacity: 0.3, position: 'absolute', top: '12px', right: '12px' }}>🌐</span>
+              <span>WhatsApp Web.js</span>
+              <small>Chromium-based — full browser emulation, higher memory usage, slower startup.</small>
+            </label>
+          </div>
+
+          <div style={{ padding: '0.75rem 1rem', marginTop: '0.75rem', background: engineType === 'baileys' ? 'rgba(34,197,94,0.08)' : 'rgba(251,191,36,0.08)', borderRadius: '8px', border: `1px solid ${engineType === 'baileys' ? 'rgba(34,197,94,0.2)' : 'rgba(251,191,36,0.2)'}`, fontSize: '0.8125rem', color: '#475569', lineHeight: 1.5 }}>
+            {engineType === 'baileys'
+              ? '⚡ Baileys connects directly via WebSocket — no browser needed. Faster, uses ~100MB less RAM. Works on headless servers without Chrome.'
+              : '🌐 WhatsApp Web.js runs a full Chromium browser. Slower startup (~10-15s), uses ~300MB RAM. More compatible with some WhatsApp features but heavier.'}
           </div>
         </section>
 

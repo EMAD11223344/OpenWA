@@ -58,6 +58,7 @@ interface SaveConfigDto {
     s3Endpoint?: string;
   };
   engine?: {
+    type?: 'whatsapp-web.js' | 'baileys';
     headless?: boolean;
     sessionDataPath?: string;
     browserArgs?: string;
@@ -171,7 +172,7 @@ export class InfraController {
     const storageType = this.configService.get<'local' | 's3'>('storage.type', 'local');
     const storagePath = this.configService.get<string>('storage.path', './uploads');
 
-    const engineType = this.configService.get<string>('engine.type', 'whatsapp-web.js');
+    const engineType = this.configService.get<string>('engine.type', 'baileys');
     const engineHeadless = this.configService.get<boolean>('engine.headless', true);
     const sessionDataPath = this.configService.get<string>('engine.sessionDataPath', './data/sessions');
     const browserArgs = this.configService.get<string>('engine.browserArgs', '--no-sandbox --disable-gpu');
@@ -318,6 +319,9 @@ export class InfraController {
       // Engine
       if (config.engine) {
         envLines.push('# WhatsApp Engine');
+        if (config.engine.type) {
+          envLines.push(`ENGINE_TYPE=${config.engine.type}`);
+        }
         envLines.push(`ENGINE_HEADLESS=${config.engine.headless !== false ? 'true' : 'false'}`);
         envLines.push(`ENGINE_SESSION_PATH=${config.engine.sessionDataPath || './data/sessions'}`);
         envLines.push(`ENGINE_BROWSER_ARGS=${config.engine.browserArgs || '--no-sandbox --disable-gpu'}`);

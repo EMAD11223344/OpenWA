@@ -334,6 +334,8 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
 
         const incoming = this.mapIncomingMessage(msg);
         if (incoming) {
+          // Download media in background — don't block message processing
+          this.downloadAndPersistMedia(msg, incoming).catch(() => {});
           this.callbacks.onMessage?.(incoming);
         }
       }
@@ -399,6 +401,48 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
       this.logger.warn(`Failed to map incoming message: ${String(msg)}`);
       return null;
     }
+  }
+
+  private async downloadAndPersistMedia(rawMsg: any, incoming: IncomingMessage): Promise<void> {
+    if (!this.socket || !incoming.media) return;
+    try {
+      const { downloadContentFromMessage } = await import('@whiskeysockets/baileys');
+      const msgProto = rawMsg.message;
+      if (!msgProto) return;
+
+      const mediaType = (incoming.type === 'image' ? 'image' : incoming.type === 'video' ? 'video'
+        : incoming.type === 'audio' ? 'audio' : incoming.type === 'sticker' ? 'sticker'
+        : 'document') as any;
+      const stream = await downloadContentFromMessage(msgProto, mediaType);
+      let buffer = Buffer.alloc(0);
+      for await (const chunk of stream) {
+        buffer = Buffer.concat([buffer, chunk]);
+      }
+      if (buffer.length === 0) return;
+
+      const ext = incoming.media.mimetype?.split('/')[1]?.split(';')[0] || 'bin';
+      const mediaDir = path.join(this.authDir, 'media');
+      await fs.mkdir(mediaDir, { recursive: true }).catch(() => {});
+      const filePath = path.join(mediaDir, `${incoming.id}.${ext}`);
+      await fs.writeFile(filePath, buffer);
+
+      incoming.media.data = buffer.toString('base64');
+      (incoming as any).mediaUrl = filePath;
+      this.logger.debug(`Persisted media for ${incoming.id}: ${filePath} (${buffer.length} bytes)`);
+    } catch (err) {
+      this.logger.warn(`Media download failed for ${incoming.id}: ${(err as Error).message}`);
+    }
+  }
+
+  public getMediaPath(messageId: string): string | null {
+    const mediaDir = path.join(this.authDir, 'media');
+    for (const ext of ['jpg', 'jpeg', 'png', 'webp', 'gif', 'mp4', 'ogg', 'opus', 'mp3', 'pdf', 'bin']) {
+      const p = path.join(mediaDir, `${messageId}.${ext}`);
+      try {
+        return p;
+      } catch { /* ignore */ }
+    }
+    return null;
   }
 
   // ─── Messaging: Basic ────────────────────────────────────────────────────────

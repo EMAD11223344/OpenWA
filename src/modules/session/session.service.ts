@@ -706,4 +706,47 @@ export class SessionService implements OnModuleDestroy, OnModuleInit {
   isActive(id: string): boolean {
     return this.engines.has(id);
   }
+
+  /**
+   * Resolve media file path for a given session + messageId.
+   * Tries both Baileys (authDir/media/) and WWJS (sessionDataPath/media/) paths.
+   */
+  async getMediaPath(sessionId: string, messageId: string): Promise<{ filePath: string; mimeType: string } | null> {
+    const session = await this.sessionRepository.findOne({ where: { id: sessionId } });
+    if (!session) return null;
+
+    const engineType = typeof session.config?.engine === 'string' ? session.config.engine : 'whatsapp-web.js';
+    const dataBase = this.engineFactory['configService']?.get<string>('dataDatabase.database') ?? './data/openwa.sqlite';
+    const dataDir = require('path').dirname(dataBase);
+
+    // Try both engine paths
+    const candidates = engineType === 'baileys'
+      ? [
+          require('path').join(dataDir, 'sessions', session.name, 'media'),
+          require('path').join(dataDir, 'sessions', sessionId, 'media'),
+        ]
+      : [
+          require('path').join(dataDir, 'sessions', 'media'),
+          require('path').join(this.engineFactory['configService']?.get<string>('engine.sessionDataPath') ?? './data/sessions', 'media'),
+        ];
+
+    const fs = require('fs/promises');
+    for (const dir of candidates) {
+      // Scan for any extension matching the messageId
+      try {
+        const files = await fs.readdir(dir);
+        const match = files.find((f: string) => f.startsWith(messageId + '.'));
+        if (match) {
+          const ext = match.split('.').pop()?.toLowerCase() || 'bin';
+          const mimeMap: Record<string, string> = {
+            jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp',
+            gif: 'image/gif', mp4: 'video/mp4', ogg: 'audio/ogg', opus: 'audio/ogg',
+            mp3: 'audio/mpeg', pdf: 'application/pdf', bin: 'application/octet-stream',
+          };
+          return { filePath: require('path').join(dir, match), mimeType: mimeMap[ext] || 'application/octet-stream' };
+        }
+      } catch { /* dir doesn't exist */ }
+    }
+    return null;
+  }
 }
