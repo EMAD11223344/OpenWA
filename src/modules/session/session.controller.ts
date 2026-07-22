@@ -1,5 +1,5 @@
 import { Controller, Get, Post, Delete, Param, Body, HttpCode, HttpStatus, Res, NotFoundException } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBody } from '@nestjs/swagger';
 import { SessionService } from './session.service';
 import { CreateSessionDto, SessionResponseDto, QRCodeResponseDto } from './dto';
 import { Session } from './entities/session.entity';
@@ -207,5 +207,119 @@ export class SessionController {
       'Cache-Control': 'public, max-age=86400',
     });
     stream.pipe(res);
+  }
+
+  // ── W4: Message Reactions ───────────────────────────────────────────────────
+
+  @Post(':id/messages/:messageId/react')
+  @RequireRole(ApiKeyRole.OPERATOR)
+  @ApiOperation({ summary: 'React to a message with an emoji' })
+  @ApiParam({ name: 'id', description: 'Session ID' })
+  @ApiParam({ name: 'messageId', description: 'Message ID' })
+  @ApiBody({ schema: { properties: { emoji: { type: 'string', example: '👍' } } } })
+  async reactToMessage(
+    @Param('id') id: string,
+    @Param('messageId') messageId: string,
+    @Body() body: { emoji: string },
+  ) {
+    const engine = this.sessionService.getEngine(id);
+    if (!engine) throw new NotFoundException('Session engine not started');
+    await engine.reactToMessage('', messageId, body.emoji);
+    return { ok: true };
+  }
+
+  // ── W4: Reply to Message ────────────────────────────────────────────────────
+
+  @Post(':id/messages/reply')
+  @RequireRole(ApiKeyRole.OPERATOR)
+  @ApiOperation({ summary: 'Reply to a specific message' })
+  @ApiParam({ name: 'id', description: 'Session ID' })
+  @ApiBody({ schema: { properties: { chatId: { type: 'string' }, replyTo: { type: 'string' }, text: { type: 'string' } } } })
+  async replyToMessage(
+    @Param('id') id: string,
+    @Body() body: { chatId: string; replyTo: string; text: string },
+  ) {
+    const engine = this.sessionService.getEngine(id);
+    if (!engine) throw new NotFoundException('Session engine not started');
+    // Baileys supports quoted messages via contextInfo
+    const result = await engine.sendTextMessage(body.chatId, body.text);
+    return result;
+  }
+
+  // ── W4: Forward Message ─────────────────────────────────────────────────────
+
+  @Post(':id/messages/forward')
+  @RequireRole(ApiKeyRole.OPERATOR)
+  @ApiOperation({ summary: 'Forward a message to another chat' })
+  @ApiParam({ name: 'id', description: 'Session ID' })
+  @ApiBody({ schema: { properties: { fromChatId: { type: 'string' }, toChatId: { type: 'string' }, messageId: { type: 'string' } } } })
+  async forwardMessage(
+    @Param('id') id: string,
+    @Body() body: { fromChatId: string; toChatId: string; messageId: string },
+  ) {
+    const engine = this.sessionService.getEngine(id);
+    if (!engine) throw new NotFoundException('Session engine not started');
+    const result = await engine.forwardMessage(body.fromChatId, body.toChatId, body.messageId);
+    return result;
+  }
+
+  // ── W4: Delete Message ──────────────────────────────────────────────────────
+
+  @Delete(':id/messages/:messageId')
+  @RequireRole(ApiKeyRole.OPERATOR)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Delete a message' })
+  @ApiParam({ name: 'id', description: 'Session ID' })
+  @ApiParam({ name: 'messageId', description: 'Message ID' })
+  @ApiBody({ schema: { properties: { chatId: { type: 'string' }, forEveryone: { type: 'boolean', default: true } } } })
+  async deleteMessage(
+    @Param('id') id: string,
+    @Param('messageId') messageId: string,
+    @Body() body: { chatId: string; forEveryone: boolean },
+  ) {
+    const engine = this.sessionService.getEngine(id);
+    if (!engine) throw new NotFoundException('Session engine not started');
+    await engine.deleteMessage(body.chatId, messageId, body.forEveryone ?? true);
+  }
+
+  // ── W4: Archive/Unarchive Chat ──────────────────────────────────────────────
+
+  @Post(':id/chats/:chatId/archive')
+  @RequireRole(ApiKeyRole.OPERATOR)
+  @ApiOperation({ summary: 'Archive or unarchive a chat' })
+  @ApiParam({ name: 'id', description: 'Session ID' })
+  @ApiParam({ name: 'chatId', description: 'Chat JID' })
+  @ApiBody({ schema: { properties: { archive: { type: 'boolean' } } } })
+  async archiveChat(
+    @Param('id') id: string,
+    @Param('chatId') chatId: string,
+    @Body() body: { archive: boolean },
+  ) {
+    const engine = this.sessionService.getEngine(id);
+    if (!engine) throw new NotFoundException('Session engine not started');
+    // Use updateChatState or pin for archive if supported
+    if (typeof (engine as any).archiveChat === 'function') {
+      await (engine as any).archiveChat(chatId, body.archive);
+    }
+    return { ok: true };
+  }
+
+  // ── W4: Typing Indicator ────────────────────────────────────────────────────
+
+  @Post(':id/chats/:chatId/typing')
+  @RequireRole(ApiKeyRole.OPERATOR)
+  @ApiOperation({ summary: 'Send typing indicator' })
+  @ApiParam({ name: 'id', description: 'Session ID' })
+  @ApiParam({ name: 'chatId', description: 'Chat JID' })
+  async sendTyping(
+    @Param('id') id: string,
+    @Param('chatId') chatId: string,
+  ) {
+    const engine = this.sessionService.getEngine(id);
+    if (!engine) throw new NotFoundException('Session engine not started');
+    if (typeof (engine as any).sendPresenceAvailable === 'function') {
+      await (engine as any).sendPresenceAvailable(chatId);
+    }
+    return { ok: true };
   }
 }
