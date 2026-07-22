@@ -1,6 +1,7 @@
 import { EventEmitter } from 'events';
 import path from 'path';
 import fs from 'fs/promises';
+import https from 'https';
 import * as qrcode from 'qrcode';
 import {
   IWhatsAppEngine,
@@ -29,6 +30,13 @@ import {
 } from '../interfaces/whatsapp-engine.interface';
 import { createLogger } from '../../common/services/logger.service';
 
+// Force IPv4 HTTPS Agent to prevent IPv6 silent connection timeouts in container environments (Hugging Face / Docker)
+const httpsAgent = new https.Agent({
+  keepAlive: true,
+  family: 4,
+  timeout: 30000,
+});
+
 export interface BaileysAdapterConfig {
   sessionId: string;
   authDir: string;
@@ -53,12 +61,6 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
   private callbacks: EngineEventCallbacks = {};
   private authState: any = null;
   private saveCreds: (() => Promise<void>) | null = null;
-
-  // NOTE: The previous 45s QR timer was removed (commit fixed).
-  // Reason: Baileys' own `connectTimeoutMs: 60_000` is the real timeout for the
-  // initial WebSocket+TLS handshake. Racing a 45s timer against it kills the
-  // session BEFORE the SSL handshake completes — suppressing the very QR we
-  // were trying to capture. Trust Baileys' native timeout instead.
 
   // Lazy-loaded baileys references — resolved at initialize() so the module
   // doesn't crash if @whiskeysockets/baileys isn't installed (e.g. when the
@@ -119,7 +121,7 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
 
     const browserTuple = this.B.Browsers?.ubuntu('Chrome') ?? ['Ubuntu', 'Chrome', '20.0.04'];
 
-    // Create the socket with valid 3-string browser tuple
+    // Create the socket with valid 3-string browser tuple and IPv4 Agent
     this.socket = this.B.makeWASocket({
       auth: state,
       version,
@@ -127,14 +129,18 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
       printQRInTerminal: this.printQR,
       markOnlineOnConnect: false,
       syncFullHistory: false,
-      connectTimeoutMs: 60_000,
+      connectTimeoutMs: 30_000,
       retryRequestDelayMs: 2_000,
       maxRetries: 5,
       generateHighQualityLinkPreview: false,
+      agent: httpsAgent,
+      fetch: (url: string, init?: any) => fetch(url, { ...init, agent: httpsAgent }),
       options: {
+        agent: httpsAgent,
         headers: {
           'User-Agent':
             'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+          'Origin': 'https://web.whatsapp.com',
         },
       },
       ...(this.getProxyConfig()),
