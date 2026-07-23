@@ -160,16 +160,19 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
       this.logger.warn(`Failed to fetch latest Baileys version, using fallback: ${String(err)}`);
     }
 
-    const browserTuple = this.B.Browsers?.ubuntu?.('Chrome') ?? ['Ubuntu', 'Chrome', '20.0.04'];
+    const browserTuple = this.B.Browsers?.macOS?.('Desktop') ?? ['Mac OS', 'Desktop', '14.4.1'];
 
-    // Create the socket with valid 3-string browser tuple
-    this.socket = this.B.makeWASocket({
+    // `syncFullHistory: true` is required by Baileys to download the full
+    // chat history after QR scan (per official wiki docs). The downside is a
+    // heavier initial sync, but that's the only way messages flow after QR
+    // scanning and reconnecting.
+    const socketOpts: Record<string, unknown> = {
       auth: state,
       version,
       browser: browserTuple,
       printQRInTerminal: this.printQR,
       markOnlineOnConnect: false,
-      syncFullHistory: false,
+      syncFullHistory: true,
       connectTimeoutMs: 60_000,
       retryRequestDelayMs: 2_000,
       maxRetries: 5,
@@ -181,7 +184,18 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
         },
       },
       ...this.getProxyConfig(),
-    });
+    };
+
+    // Allow users to override the WhatsApp WebSocket endpoint via env.
+    // Useful if WhatsApp rotates or geo-blocks the default `waWebSocketUrl`.
+    // Official Baileys Example: `waWebSocketUrl: process.env.SOCKET_URL ?? DEFAULT_CONNECTION_CONFIG.waWebSocketUrl`
+    const socketUrlOverride = process.env.WA_WEBSOCKET_URL;
+    if (socketUrlOverride) {
+      socketOpts.waWebSocketUrl = socketUrlOverride;
+      this.logger.log(`Using overridden WhatsApp WebSocket URL: ${socketUrlOverride}`);
+    }
+
+    this.socket = this.B.makeWASocket(socketOpts);
 
     // Bind in-memory store to socket event emitter
     if (this.store) {
@@ -301,9 +315,51 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
       return {};
     }
 
+    // Validate the proxy URL up-front. Bail out with a clear error if the
+    // user pasted an obvious placeholder (e.g. `http://user:pass@host:1080`
+    // from example docs) so we don't waste 60s of TLS timeouts per attempt.
+    let parsed: URL;
+    try {
+      parsed = new URL(this.proxyUrl);
+    } catch (err) {
+      this.logger.error(
+        `Invalid WHATSAPP_PROXY_URL — could not parse "${this.proxyUrl}" as a URL. Falling back to direct connection.`,
+        undefined,
+        { sessionId: this.sessionId, error: String(err) },
+      );
+      return {};
+    }
+
+    if (!parsed.hostname || parsed.hostname === 'host' || parsed.hostname === 'localhost') {
+      this.logger.error(
+        `Proxy URL hostname is "${parsed.hostname}" — looks like a placeholder. Set WHATSAPP_PROXY_URL to a real residential proxy (e.g. "socks5://user:pass@203.0.113.5:1080"). Falling back to direct connection.`,
+        undefined,
+        {
+          sessionId: this.sessionId,
+          proxyHost: parsed.hostname,
+          action: 'proxy_placeholder_detected',
+        },
+      );
+      return {};
+    }
+
+    // Log a redacted URL so the user can verify what was actually parsed.
+    const redactedUrl = (() => {
+      const u = new URL(parsed.toString());
+      u.username = '';
+      u.password = '';
+      return u.toString();
+    })();
+    this.logger.log(`Proxy configured: ${parsed.protocol} ${redactedUrl}`, {
+      sessionId: this.sessionId,
+      proxyHost: parsed.hostname,
+      proxyPort: parsed.port || (parsed.protocol === 'https:' ? '443' : '80'),
+      action: 'proxy_configured',
+    });
+
     // Baileys' `makeWASocket` accepts `agent?: Agent` (Node https.Agent) which
-    // is forwarded to the underlying WebSocket and to `fetch`. We lazily require
-    // the proxy-agent packages so the module stays optional.
+    // is forwarded to the underlying WebSocket and to `fetch`. We lazily
+    // require the proxy-agent packages so the module stays optional.
     try {
       if (this.proxyType === 'socks4' || this.proxyType === 'socks5') {
         const { SocksProxyAgent } = require('socks-proxy-agent') as {
