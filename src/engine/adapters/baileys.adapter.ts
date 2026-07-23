@@ -126,18 +126,20 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
       }, 10_000);
     }
 
-    // Load or create auth state
-    let { state, saveCreds } = await this.B.useMultiFileAuthState(this.authDir);
+    // Load or create auth state — Baileys handles fresh-vs-resume automatically.
+    // DO NOT delete the auth dir on unauthenticated sessions: that introduces a
+    // race where a prior socket's in-flight saveCreds writes back into a wiped
+    // dir, corrupting state. Let Baileys emit a QR naturally if creds are absent.
+    const { state, saveCreds } = await this.B.useMultiFileAuthState(this.authDir);
 
-    // If session is unauthenticated (no registered user ID), clear stale partial credentials
-    // to guarantee Baileys starts completely fresh and emits a new QR code immediately.
-    if (!state.creds?.me?.id && !state.creds?.registered) {
-      this.logger.log(`Session ${this.sessionId} is unauthenticated — resetting auth dir to generate fresh QR.`);
-      await fs.rm(this.authDir, { recursive: true, force: true }).catch(() => {});
-      await fs.mkdir(this.authDir, { recursive: true });
-      const freshAuth = await this.B.useMultiFileAuthState(this.authDir);
-      state = freshAuth.state;
-      saveCreds = freshAuth.saveCreds;
+    // Wrap the raw file-backed signal key store with Baileys' official caching
+    // layer. Without it, every session read/write hits disk directly with no
+    // protection against a write-then-immediate-read race — a freshly-established
+    // Signal session appears "missing" moments later, forcing Baileys to discard
+    // it and start a brand new PreKey handshake (visible as repeated "Closing
+    // session" log spam and the recipient stuck on "waiting for this message").
+    if (typeof this.B.makeCacheableSignalKeyStore === 'function') {
+      state.keys = this.B.makeCacheableSignalKeyStore(state.keys, this.createBaileysLogger());
     }
 
     this.authState = state;
@@ -162,27 +164,26 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
 
     const browserTuple = this.B.Browsers?.macOS?.('Desktop') ?? ['Mac OS', 'Desktop', '14.4.1'];
 
-    // `syncFullHistory: true` is required by Baileys to download the full
-    // chat history after QR scan (per official wiki docs). The downside is a
-    // heavier initial sync, but that's the only way messages flow after QR
-    // scanning and reconnecting.
+    // Per official rmyndharis/OpenWA adapter:
+    // - shouldSyncHistoryMessage: () => true enables the initial sync (contacts, chats, recent
+    //   history, lid->phone mappings). Without it, NO contacts/chats/history ever arrive.
+    // - syncFullHistory: false by default (recent window only). Set BAILEYS_SYNC_FULL_HISTORY=true
+    //   for the full archive download (heavy, can overwhelm a freshly-paired session).
+    // - No custom User-Agent header: WhatsApp's anti-bot fingerprinting can flag an unexpected UA
+    //   on the WS UPGRADE and silently drop the handshake — which looks like "QR never appears".
+    // - No maxRetries cap: a flaky network must not kill the session permanently.
     const socketOpts: Record<string, unknown> = {
       auth: state,
       version,
       browser: browserTuple,
       printQRInTerminal: this.printQR,
       markOnlineOnConnect: false,
-      syncFullHistory: true,
+      shouldSyncHistoryMessage: () => true,
+      syncFullHistory: process.env.BAILEYS_SYNC_FULL_HISTORY === 'true',
       connectTimeoutMs: 60_000,
       retryRequestDelayMs: 2_000,
-      maxRetries: 5,
       generateHighQualityLinkPreview: false,
-      options: {
-        headers: {
-          'User-Agent':
-            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-        },
-      },
+      logger: this.createBaileysLogger(),
       ...this.getProxyConfig(),
     };
 
@@ -293,6 +294,42 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
     if (this.status !== EngineStatus.READY || !this.socket) {
       throw new Error('WhatsApp client is not ready');
     }
+  }
+
+  /**
+   * Build a pino-compatible logger for Baileys. Silent by default; set
+   * BAILEYS_LOG_LEVEL=trace|debug|info|warn|error to surface Baileys' own
+   * diagnostics (WebSocket handshake, history sync, app-state sync, wire frames).
+   * Emits JSON lines to stdout (context "baileys-wire") so a run can be captured
+   * with `BAILEYS_LOG_LEVEL=trace node dist/main > baileys-wire.log`.
+   */
+  private createBaileysLogger(): unknown {
+    const levels = ['trace', 'debug', 'info', 'warn', 'error'];
+    const configured = (process.env.BAILEYS_LOG_LEVEL ?? 'silent').toLowerCase();
+    if (!levels.includes(configured)) {
+      return undefined; // let Baileys use its default
+    }
+    const threshold = levels.indexOf(configured);
+    const write =
+      (lvl: string) =>
+      (obj: unknown, msg?: string): void => {
+        if (levels.indexOf(lvl) < threshold) return;
+        const rec =
+          typeof obj === 'string' ? { msg: obj } : { ...(obj as Record<string, unknown>), ...(msg ? { msg } : {}) };
+        process.stdout.write(
+          JSON.stringify({ ts: new Date().toISOString(), level: lvl, context: 'baileys-wire', ...rec }) + '\n',
+        );
+      };
+    const logger: Record<string, unknown> = {
+      level: configured,
+      child: () => logger,
+      trace: write('trace'),
+      debug: write('debug'),
+      info: write('info'),
+      warn: write('warn'),
+      error: write('error'),
+    };
+    return logger;
   }
 
   /**
