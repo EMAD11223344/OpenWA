@@ -10,11 +10,7 @@ import { SessionService } from '../modules/session/session.service';
 import { EngineStatus } from '../engine/interfaces/whatsapp-engine.interface';
 import { ConfigService } from '@nestjs/config';
 
-function makeSnapshotEntry(
-  id: string,
-  status: EngineStatus,
-  sinceMs: number,
-) {
+function makeSnapshotEntry(id: string, status: EngineStatus, sinceMs: number) {
   return { id, status, sinceMs };
 }
 
@@ -32,28 +28,30 @@ describe('EngineWatchdogService — memory cull path', () => {
     mockConfig = {
       get: jest.fn((key: string) => {
         switch (key) {
-          case 'WATCHDOG_STUCK_THRESHOLD_MS': return '90000';
-          case 'WATCHDOG_MEMORY_LIMIT_MB': return '1024';
-          case 'WATCHDOG_MAX_ATTEMPTS': return '3';
-          case 'WATCHDOG_ATTEMPT_WINDOW_MS': return '600000';
-          default: return undefined;
+          case 'WATCHDOG_STUCK_THRESHOLD_MS':
+            return '90000';
+          case 'WATCHDOG_MEMORY_LIMIT_MB':
+            return '1024';
+          case 'WATCHDOG_MAX_ATTEMPTS':
+            return '3';
+          case 'WATCHDOG_ATTEMPT_WINDOW_MS':
+            return '600000';
+          default:
+            return undefined;
         }
       }),
     };
 
-    watchdog = new EngineWatchdogService(
-      mockConfig as ConfigService,
-      mockSessionService as SessionService,
-    );
+    watchdog = new EngineWatchdogService(mockConfig as ConfigService, mockSessionService as SessionService);
   });
 
   it('culled the oldest non-READY session when RSS exceeds memory limit', async () => {
     // 12 sessions: 8 READY, 4 non-READY with increasing sinceMs (oldest = lowest sinceMs)
     const snapshot = [
-      makeSnapshotEntry('sess-1', EngineStatus.INITIALIZING, 300_000),  // oldest non-READY
+      makeSnapshotEntry('sess-1', EngineStatus.INITIALIZING, 300_000), // oldest non-READY
       makeSnapshotEntry('sess-2', EngineStatus.DISCONNECTED, 200_000),
       makeSnapshotEntry('sess-3', EngineStatus.QR_READY, 100_000),
-      makeSnapshotEntry('sess-4', EngineStatus.INITIALIZING, 50_000),   // newest non-READY
+      makeSnapshotEntry('sess-4', EngineStatus.INITIALIZING, 50_000), // newest non-READY
       makeSnapshotEntry('sess-5', EngineStatus.READY, 400_000),
       makeSnapshotEntry('sess-6', EngineStatus.READY, 400_000),
       makeSnapshotEntry('sess-7', EngineStatus.READY, 400_000),

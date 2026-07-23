@@ -28,19 +28,21 @@ describe('EngineWatchdogService — circuit breaker', () => {
     mockConfig = {
       get: jest.fn((key: string) => {
         switch (key) {
-          case 'WATCHDOG_STUCK_THRESHOLD_MS': return '90000';
-          case 'WATCHDOG_MEMORY_LIMIT_MB': return '16384';
-          case 'WATCHDOG_MAX_ATTEMPTS': return '3';
-          case 'WATCHDOG_ATTEMPT_WINDOW_MS': return '600000';
-          default: return undefined;
+          case 'WATCHDOG_STUCK_THRESHOLD_MS':
+            return '90000';
+          case 'WATCHDOG_MEMORY_LIMIT_MB':
+            return '16384';
+          case 'WATCHDOG_MAX_ATTEMPTS':
+            return '3';
+          case 'WATCHDOG_ATTEMPT_WINDOW_MS':
+            return '600000';
+          default:
+            return undefined;
         }
       }),
     };
 
-    watchdog = new EngineWatchdogService(
-      mockConfig as ConfigService,
-      mockSessionService as SessionService,
-    );
+    watchdog = new EngineWatchdogService(mockConfig as ConfigService, mockSessionService as SessionService);
 
     // Fake RSS below memory limit so memory cull doesn't interfere
     const origMemUsage = process.memoryUsage;

@@ -53,11 +53,7 @@ export class SessionService implements OnModuleDestroy, OnModuleInit {
    * "silent disconnect" window after a Space/docker restart.
    */
   async onModuleInit(): Promise<void> {
-    const activeStatuses = [
-      SessionStatus.READY,
-      SessionStatus.INITIALIZING,
-      SessionStatus.QR_READY,
-    ];
+    const activeStatuses = [SessionStatus.READY, SessionStatus.INITIALIZING, SessionStatus.QR_READY];
 
     const result = await this.sessionRepository.update(
       { status: In(activeStatuses) },
@@ -86,14 +82,17 @@ export class SessionService implements OnModuleDestroy, OnModuleInit {
       });
       for (const session of sessions) {
         // Stagger by 3s per session to spread Chromium launches.
-        setTimeout(() => {
-          this.start(session.id).catch((err) => {
-            this.logger.warn(`Auto-reconnect failed for session ${session.name}: ${(err as Error)?.message}`, {
-              action: 'boot_reconnect_failed',
-              sessionId: session.id,
+        setTimeout(
+          () => {
+            this.start(session.id).catch(err => {
+              this.logger.warn(`Auto-reconnect failed for session ${session.name}: ${(err as Error)?.message}`, {
+                action: 'boot_reconnect_failed',
+                sessionId: session.id,
+              });
             });
-          });
-        }, 3000 * sessions.indexOf(session));
+          },
+          3000 * sessions.indexOf(session),
+        );
       }
     } catch (err) {
       this.logger.error(`Boot reconnect error: ${(err as Error)?.message}`);
@@ -267,16 +266,13 @@ export class SessionService implements OnModuleDestroy, OnModuleInit {
 
     const engine = this.engineFactory.create({
       sessionId: session.name,
-      engineType:
-        typeof session.config?.engine === 'string' ? (session.config.engine as string) : undefined,
+      engineType: typeof session.config?.engine === 'string' ? session.config.engine : undefined,
       proxyUrl: session.proxyUrl || undefined,
       proxyType: session.proxyType || undefined,
     });
     this.engines.set(id, engine);
     const engineType =
-      typeof session.config?.engine === 'string'
-        ? (session.config.engine as string)
-        : this.engineFactory.getCurrentEngine();
+      typeof session.config?.engine === 'string' ? session.config.engine : this.engineFactory.getCurrentEngine();
     this.engineMeta.set(id, { sessionName: session.name, engineType });
     this.engineActiveSince.set(id, new Date().toISOString());
 
@@ -359,9 +355,9 @@ export class SessionService implements OnModuleDestroy, OnModuleInit {
             }
 
             // Dispatch to webhooks with potentially modified message
-            void this.webhookService.dispatch(id, 'message.received', finalMessage as Record<string, unknown>);
+            void this.webhookService.dispatch(id, 'message.received', finalMessage);
             // Emit real-time event to WebSocket clients
-            this.eventsGateway.emitMessage(id, finalMessage as Record<string, unknown>);
+            this.eventsGateway.emitMessage(id, finalMessage);
           });
       },
       onDisconnected: (reason: string): void => {
@@ -507,10 +503,7 @@ export class SessionService implements OnModuleDestroy, OnModuleInit {
    *   - engineMeta         → { sessionName, engineType } at create time
    */
   private readonly engineActiveSince = new Map<string, string>();
-  private readonly engineMeta = new Map<
-    string,
-    { sessionName: string; engineType: string }
-  >();
+  private readonly engineMeta = new Map<string, { sessionName: string; engineType: string }>();
 
   /**
    * Public hook for the EngineWatchdog and dashboard. Never throws.
@@ -606,9 +599,10 @@ export class SessionService implements OnModuleDestroy, OnModuleInit {
       return {
         qrCode: '',
         status: session.status,
-        error: session.status === SessionStatus.FAILED
-          ? 'Engine failed to start. Check logs for details.'
-          : 'Session is not started. Call POST /sessions/:id/start first.',
+        error:
+          session.status === SessionStatus.FAILED
+            ? 'Engine failed to start. Check logs for details.'
+            : 'Session is not started. Call POST /sessions/:id/start first.',
       };
     }
 
@@ -619,7 +613,11 @@ export class SessionService implements OnModuleDestroy, OnModuleInit {
         return { qrCode: '', status: session.status, error: 'Session is already authenticated, no QR code needed' };
       }
       if (session.status === SessionStatus.FAILED) {
-        return { qrCode: '', status: session.status, error: 'Engine failed — connection timed out or server unreachable' };
+        return {
+          qrCode: '',
+          status: session.status,
+          error: 'Engine failed — connection timed out or server unreachable',
+        };
       }
       return { qrCode: '', status: session.status, error: 'QR code is not ready yet. Please wait...' };
     }
@@ -717,19 +715,24 @@ export class SessionService implements OnModuleDestroy, OnModuleInit {
     if (!session) return null;
 
     const engineType = typeof session.config?.engine === 'string' ? session.config.engine : 'whatsapp-web.js';
-    const dataBase = this.engineFactory['configService']?.get<string>('dataDatabase.database') ?? './data/openwa.sqlite';
+    const dataBase =
+      this.engineFactory['configService']?.get<string>('dataDatabase.database') ?? './data/openwa.sqlite';
     const dataDir = require('path').dirname(dataBase);
 
     // Try both engine paths
-    const candidates = engineType === 'baileys'
-      ? [
-          require('path').join(dataDir, 'sessions', session.name, 'media'),
-          require('path').join(dataDir, 'sessions', sessionId, 'media'),
-        ]
-      : [
-          require('path').join(dataDir, 'sessions', 'media'),
-          require('path').join(this.engineFactory['configService']?.get<string>('engine.sessionDataPath') ?? './data/sessions', 'media'),
-        ];
+    const candidates =
+      engineType === 'baileys'
+        ? [
+            require('path').join(dataDir, 'sessions', session.name, 'media'),
+            require('path').join(dataDir, 'sessions', sessionId, 'media'),
+          ]
+        : [
+            require('path').join(dataDir, 'sessions', 'media'),
+            require('path').join(
+              this.engineFactory['configService']?.get<string>('engine.sessionDataPath') ?? './data/sessions',
+              'media',
+            ),
+          ];
 
     const fs = require('fs/promises');
     for (const dir of candidates) {
@@ -740,13 +743,23 @@ export class SessionService implements OnModuleDestroy, OnModuleInit {
         if (match) {
           const ext = match.split('.').pop()?.toLowerCase() || 'bin';
           const mimeMap: Record<string, string> = {
-            jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp',
-            gif: 'image/gif', mp4: 'video/mp4', ogg: 'audio/ogg', opus: 'audio/ogg',
-            mp3: 'audio/mpeg', pdf: 'application/pdf', bin: 'application/octet-stream',
+            jpg: 'image/jpeg',
+            jpeg: 'image/jpeg',
+            png: 'image/png',
+            webp: 'image/webp',
+            gif: 'image/gif',
+            mp4: 'video/mp4',
+            ogg: 'audio/ogg',
+            opus: 'audio/ogg',
+            mp3: 'audio/mpeg',
+            pdf: 'application/pdf',
+            bin: 'application/octet-stream',
           };
           return { filePath: require('path').join(dir, match), mimeType: mimeMap[ext] || 'application/octet-stream' };
         }
-      } catch { /* dir doesn't exist */ }
+      } catch {
+        /* dir doesn't exist */
+      }
     }
     return null;
   }

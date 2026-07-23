@@ -211,7 +211,11 @@ export class InfraController {
   switchEngine(@Body() body: { engineType: string }): { success: boolean; engineType: string; message: string } {
     const { engineType } = body;
     if (engineType !== 'whatsapp-web.js' && engineType !== 'baileys') {
-      return { success: false, engineType: this.engineFactory.getCurrentEngine(), message: `Unknown engine: ${engineType}` };
+      return {
+        success: false,
+        engineType: this.engineFactory.getCurrentEngine(),
+        message: `Unknown engine: ${engineType}`,
+      };
     }
     this.engineFactory.setDefaultEngine(engineType);
     return {

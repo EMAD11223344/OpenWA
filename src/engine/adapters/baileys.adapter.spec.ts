@@ -138,8 +138,18 @@ describe('BaileysAdapter — multi-account isolation proof', () => {
     const adapterA = new BaileysAdapter({ sessionId: 'session-a', authDir: authA });
     const adapterB = new BaileysAdapter({ sessionId: 'session-b', authDir: authB });
 
-    await adapterA.initialize({ onReady: jest.fn(), onQRCode: jest.fn(), onDisconnected: jest.fn(), onStateChanged: jest.fn() });
-    await adapterB.initialize({ onReady: jest.fn(), onQRCode: jest.fn(), onDisconnected: jest.fn(), onStateChanged: jest.fn() });
+    await adapterA.initialize({
+      onReady: jest.fn(),
+      onQRCode: jest.fn(),
+      onDisconnected: jest.fn(),
+      onStateChanged: jest.fn(),
+    });
+    await adapterB.initialize({
+      onReady: jest.fn(),
+      onQRCode: jest.fn(),
+      onDisconnected: jest.fn(),
+      onStateChanged: jest.fn(),
+    });
 
     // Destroy adapter A
     await adapterA.destroy();
@@ -191,8 +201,18 @@ describe('BaileysAdapter — multi-account isolation proof', () => {
     const adapterA = new BaileysAdapter({ sessionId: 'session-a', authDir: authA });
     const adapterB = new BaileysAdapter({ sessionId: 'session-b', authDir: authB });
 
-    await adapterA.initialize({ onReady: jest.fn(), onQRCode: jest.fn(), onDisconnected: jest.fn(), onStateChanged: jest.fn() });
-    await adapterB.initialize({ onReady: jest.fn(), onQRCode: jest.fn(), onDisconnected: jest.fn(), onStateChanged: jest.fn() });
+    await adapterA.initialize({
+      onReady: jest.fn(),
+      onQRCode: jest.fn(),
+      onDisconnected: jest.fn(),
+      onStateChanged: jest.fn(),
+    });
+    await adapterB.initialize({
+      onReady: jest.fn(),
+      onQRCode: jest.fn(),
+      onDisconnected: jest.fn(),
+      onStateChanged: jest.fn(),
+    });
 
     // makeWASocket called twice (once per adapter)
     expect(makeWASocket).toHaveBeenCalledTimes(2);
@@ -211,8 +231,18 @@ describe('BaileysAdapter — multi-account isolation proof', () => {
     const adapterA = new BaileysAdapter({ sessionId: 'session-a', authDir: authA });
     const adapterB = new BaileysAdapter({ sessionId: 'session-b', authDir: authB });
 
-    await adapterA.initialize({ onReady: jest.fn(), onQRCode: jest.fn(), onDisconnected: jest.fn(), onStateChanged: jest.fn() });
-    await adapterB.initialize({ onReady: jest.fn(), onQRCode: jest.fn(), onDisconnected: jest.fn(), onStateChanged: jest.fn() });
+    await adapterA.initialize({
+      onReady: jest.fn(),
+      onQRCode: jest.fn(),
+      onDisconnected: jest.fn(),
+      onStateChanged: jest.fn(),
+    });
+    await adapterB.initialize({
+      onReady: jest.fn(),
+      onQRCode: jest.fn(),
+      onDisconnected: jest.fn(),
+      onStateChanged: jest.fn(),
+    });
 
     // Force both to READY
     const connUpdateCalls = mockEvOn.mock.calls.filter(

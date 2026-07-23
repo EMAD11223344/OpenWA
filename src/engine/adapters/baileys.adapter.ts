@@ -122,7 +122,7 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
     // to guarantee Baileys starts completely fresh and emits a new QR code immediately.
     if (!state.creds?.me?.id && !state.creds?.registered) {
       this.logger.log(`Session ${this.sessionId} is unauthenticated — resetting auth dir to generate fresh QR.`);
-      await fs.rm(this.authDir, { recursive: true, force: true }).catch(() => { });
+      await fs.rm(this.authDir, { recursive: true, force: true }).catch(() => {});
       await fs.mkdir(this.authDir, { recursive: true });
       const freshAuth = await this.B.useMultiFileAuthState(this.authDir);
       state = freshAuth.state;
@@ -150,10 +150,11 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
       syncFullHistory: false,
       generateHighQualityLinkPreview: false,
       connectTimeoutMs: 60_000,
+      defaultQueryTimeoutMs: undefined,
       retryRequestDelayMs: 2_000,
       maxRetries: 3,
       agent,
-      ...(this.getProxyConfig()),
+      ...this.getProxyConfig(),
     };
 
     if (this.B.P) {
@@ -293,7 +294,8 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
         this.callbacks.onQRCode?.(qr);
 
         // Asynchronously render as PNG Data URL for UI display
-        qrcode.toDataURL(qr)
+        qrcode
+          .toDataURL(qr)
           .then((dataUrl: string) => {
             this.qrCode = dataUrl;
             this.callbacks.onQRCode?.(dataUrl);
@@ -360,13 +362,12 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
           }
         }
 
-        if (messageUpdate.type !== 'notify') continue; // skip historical sync
         if (msg.key?.fromMe) continue; // skip own messages
 
         const incoming = this.mapIncomingMessage(msg);
         if (incoming) {
           // Download media in background — don't block message processing
-          this.downloadAndPersistMedia(msg, incoming).catch(() => { });
+          this.downloadAndPersistMedia(msg, incoming).catch(() => {});
           this.callbacks.onMessage?.(incoming);
         }
       }
@@ -408,24 +409,33 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
         timestamp: msg.messageTimestamp ?? Math.floor(Date.now() / 1000),
         fromMe,
         isGroup,
-        media: msg.message?.imageMessage || msg.message?.videoMessage || msg.message?.audioMessage || msg.message?.documentMessage
-          ? {
-            mimetype: msg.message?.imageMessage?.mimetype ?? msg.message?.videoMessage?.mimetype ?? msg.message?.audioMessage?.mimetype ?? msg.message?.documentMessage?.mimetype ?? 'application/octet-stream',
-            filename: msg.message?.documentMessage?.fileName ?? undefined,
-          }
-          : undefined,
+        media:
+          msg.message?.imageMessage ||
+          msg.message?.videoMessage ||
+          msg.message?.audioMessage ||
+          msg.message?.documentMessage
+            ? {
+                mimetype:
+                  msg.message?.imageMessage?.mimetype ??
+                  msg.message?.videoMessage?.mimetype ??
+                  msg.message?.audioMessage?.mimetype ??
+                  msg.message?.documentMessage?.mimetype ??
+                  'application/octet-stream',
+                filename: msg.message?.documentMessage?.fileName ?? undefined,
+              }
+            : undefined,
         quotedMessage: msg.message?.extendedTextMessage?.contextInfo?.quotedMessage
           ? {
-            id: msg.message.extendedTextMessage.contextInfo.stanzaId ?? '',
-            body: msg.message.extendedTextMessage.contextInfo.conversation ?? '',
-          }
+              id: msg.message.extendedTextMessage.contextInfo.stanzaId ?? '',
+              body: msg.message.extendedTextMessage.contextInfo.conversation ?? '',
+            }
           : undefined,
         location: msg.message?.locationMessage
           ? {
-            latitude: msg.message.locationMessage.degreesLatitude ?? 0,
-            longitude: msg.message.locationMessage.degreesLongitude ?? 0,
-            address: msg.message.locationMessage.address ?? undefined,
-          }
+              latitude: msg.message.locationMessage.degreesLatitude ?? 0,
+              longitude: msg.message.locationMessage.degreesLongitude ?? 0,
+              address: msg.message.locationMessage.address ?? undefined,
+            }
           : undefined,
       };
     } catch {
@@ -441,9 +451,17 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
       const msgProto = rawMsg.message;
       if (!msgProto) return;
 
-      const mediaType = (incoming.type === 'image' ? 'image' : incoming.type === 'video' ? 'video'
-        : incoming.type === 'audio' ? 'audio' : incoming.type === 'sticker' ? 'sticker'
-          : 'document') as any;
+      const mediaType = (
+        incoming.type === 'image'
+          ? 'image'
+          : incoming.type === 'video'
+            ? 'video'
+            : incoming.type === 'audio'
+              ? 'audio'
+              : incoming.type === 'sticker'
+                ? 'sticker'
+                : 'document'
+      ) as any;
       const stream = await downloadContentFromMessage(msgProto, mediaType);
       let buffer = Buffer.alloc(0);
       for await (const chunk of stream) {
@@ -453,7 +471,7 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
 
       const ext = incoming.media.mimetype?.split('/')[1]?.split(';')[0] || 'bin';
       const mediaDir = path.join(this.authDir, 'media');
-      await fs.mkdir(mediaDir, { recursive: true }).catch(() => { });
+      await fs.mkdir(mediaDir, { recursive: true }).catch(() => {});
       const filePath = path.join(mediaDir, `${incoming.id}.${ext}`);
       await fs.writeFile(filePath, buffer);
 
@@ -471,7 +489,9 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
       const p = path.join(mediaDir, `${messageId}.${ext}`);
       try {
         if (require('fs').existsSync(p)) return p;
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
     return null;
   }
@@ -620,7 +640,9 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
     const result = await this.socket!.sendMessage(jid, {
       contacts: {
         displayName: contact.name,
-        contacts: [{ vcard: `BEGIN:VCARD\nVERSION:3.0\nFN:${contact.name}\nTEL;type=CELL:${contact.number}\nEND:VCARD` }],
+        contacts: [
+          { vcard: `BEGIN:VCARD\nVERSION:3.0\nFN:${contact.name}\nTEL;type=CELL:${contact.number}\nEND:VCARD` },
+        ],
       },
     });
     return {

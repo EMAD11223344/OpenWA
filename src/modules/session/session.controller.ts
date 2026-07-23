@@ -1,4 +1,15 @@
-import { Controller, Get, Post, Delete, Param, Body, HttpCode, HttpStatus, Res, NotFoundException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Delete,
+  Param,
+  Body,
+  HttpCode,
+  HttpStatus,
+  Res,
+  NotFoundException,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBody } from '@nestjs/swagger';
 import { SessionService } from './session.service';
 import { CreateSessionDto, SessionResponseDto, QRCodeResponseDto } from './dto';
@@ -192,11 +203,7 @@ export class SessionController {
   @ApiParam({ name: 'messageId', description: 'Message ID (WhatsApp message ID)' })
   @ApiResponse({ status: 200, description: 'Media file stream' })
   @ApiResponse({ status: 404, description: 'Media not found' })
-  async getMedia(
-    @Param('id') id: string,
-    @Param('messageId') messageId: string,
-    @Res() res: any,
-  ) {
+  async getMedia(@Param('id') id: string, @Param('messageId') messageId: string, @Res() res: any) {
     const result = await this.sessionService.getMediaPath(id, messageId);
     if (!result) {
       throw new NotFoundException('Media not found');
@@ -234,11 +241,10 @@ export class SessionController {
   @RequireRole(ApiKeyRole.OPERATOR)
   @ApiOperation({ summary: 'Reply to a specific message' })
   @ApiParam({ name: 'id', description: 'Session ID' })
-  @ApiBody({ schema: { properties: { chatId: { type: 'string' }, replyTo: { type: 'string' }, text: { type: 'string' } } } })
-  async replyToMessage(
-    @Param('id') id: string,
-    @Body() body: { chatId: string; replyTo: string; text: string },
-  ) {
+  @ApiBody({
+    schema: { properties: { chatId: { type: 'string' }, replyTo: { type: 'string' }, text: { type: 'string' } } },
+  })
+  async replyToMessage(@Param('id') id: string, @Body() body: { chatId: string; replyTo: string; text: string }) {
     const engine = this.sessionService.getEngine(id);
     if (!engine) throw new NotFoundException('Session engine not started');
     // Baileys supports quoted messages via contextInfo
@@ -252,7 +258,11 @@ export class SessionController {
   @RequireRole(ApiKeyRole.OPERATOR)
   @ApiOperation({ summary: 'Forward a message to another chat' })
   @ApiParam({ name: 'id', description: 'Session ID' })
-  @ApiBody({ schema: { properties: { fromChatId: { type: 'string' }, toChatId: { type: 'string' }, messageId: { type: 'string' } } } })
+  @ApiBody({
+    schema: {
+      properties: { fromChatId: { type: 'string' }, toChatId: { type: 'string' }, messageId: { type: 'string' } },
+    },
+  })
   async forwardMessage(
     @Param('id') id: string,
     @Body() body: { fromChatId: string; toChatId: string; messageId: string },
@@ -290,11 +300,7 @@ export class SessionController {
   @ApiParam({ name: 'id', description: 'Session ID' })
   @ApiParam({ name: 'chatId', description: 'Chat JID' })
   @ApiBody({ schema: { properties: { archive: { type: 'boolean' } } } })
-  async archiveChat(
-    @Param('id') id: string,
-    @Param('chatId') chatId: string,
-    @Body() body: { archive: boolean },
-  ) {
+  async archiveChat(@Param('id') id: string, @Param('chatId') chatId: string, @Body() body: { archive: boolean }) {
     const engine = this.sessionService.getEngine(id);
     if (!engine) throw new NotFoundException('Session engine not started');
     // Use updateChatState or pin for archive if supported
@@ -311,10 +317,7 @@ export class SessionController {
   @ApiOperation({ summary: 'Send typing indicator' })
   @ApiParam({ name: 'id', description: 'Session ID' })
   @ApiParam({ name: 'chatId', description: 'Chat JID' })
-  async sendTyping(
-    @Param('id') id: string,
-    @Param('chatId') chatId: string,
-  ) {
+  async sendTyping(@Param('id') id: string, @Param('chatId') chatId: string) {
     const engine = this.sessionService.getEngine(id);
     if (!engine) throw new NotFoundException('Session engine not started');
     if (typeof (engine as any).sendPresenceAvailable === 'function') {

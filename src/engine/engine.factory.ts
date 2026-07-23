@@ -69,10 +69,9 @@ export class EngineFactory implements OnModuleInit {
       };
       this.pluginLoader.registerBuiltInPlugin(baileysManifest, baileysPlugin as never);
     } catch (err) {
-      this.logger.warn(
-        `Skipping baileys plugin registration (not yet available): ${String(err)}`,
-        { action: 'baileys_register_skipped' },
-      );
+      this.logger.warn(`Skipping baileys plugin registration (not yet available): ${String(err)}`, {
+        action: 'baileys_register_skipped',
+      });
     }
 
     // Auto-enable the default engine
@@ -113,8 +112,7 @@ export class EngineFactory implements OnModuleInit {
         const { BaileysAdapter } = require('../engine/adapters/baileys.adapter') as {
           BaileysAdapter: { new (cfg: unknown): IWhatsAppEngine };
         };
-        const dataDir =
-          (this.configService.get<string>('dataDatabase.database') ?? './data') + '/sessions';
+        const dataDir = (this.configService.get<string>('dataDatabase.database') ?? './data') + '/sessions';
         return new BaileysAdapter({
           sessionId: options.sessionId,
           authDir: dataDir + '/' + options.sessionId,
@@ -138,7 +136,7 @@ export class EngineFactory implements OnModuleInit {
       typeof instance === 'object' &&
       instance !== null &&
       'type' in instance &&
-      (instance as { type: unknown }).type === PluginType.ENGINE &&
+      instance.type === PluginType.ENGINE &&
       'createEngine' in instance &&
       typeof (instance as { createEngine: unknown }).createEngine === 'function'
     );

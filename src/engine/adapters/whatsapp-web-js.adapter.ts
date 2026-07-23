@@ -189,7 +189,7 @@ export class WhatsAppWebJsAdapter extends EventEmitter implements IWhatsAppEngin
               };
               // Persist to disk so Business-OS can proxy it later
               try {
-                const ext = (media.mimetype?.split('/')[1]?.split(';')[0]) || 'bin';
+                const ext = media.mimetype?.split('/')[1]?.split(';')[0] || 'bin';
                 const mediaDir = path.join(this.config.sessionDataPath, 'media');
                 await fs.mkdir(mediaDir, { recursive: true });
                 const filePath = path.join(mediaDir, `${incomingMessage.id}.${ext}`);

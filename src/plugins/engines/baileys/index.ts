@@ -36,13 +36,8 @@ export class BaileysPlugin implements IEnginePlugin {
   createEngine(config: Record<string, unknown>): IWhatsAppEngine {
     const sessionId = config.sessionId as string;
     const authDir =
-      (config.authDir as string) ??
-      (this.context?.config.authDir as string) ??
-      `./data/sessions/${sessionId}`;
-    const printQR =
-      (config.printQR as boolean) ??
-      (this.context?.config.printQR as boolean) ??
-      false;
+      (config.authDir as string) ?? (this.context?.config.authDir as string) ?? `./data/sessions/${sessionId}`;
+    const printQR = (config.printQR as boolean) ?? (this.context?.config.printQR as boolean) ?? false;
 
     return new BaileysAdapter({
       sessionId,

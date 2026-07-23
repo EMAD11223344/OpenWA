@@ -47,9 +47,7 @@ export async function safeRetry<T>(
       return await fn();
     } catch (err) {
       if (attempt === maxAttempts) {
-        logger.error(
-          `safeRetry: all ${maxAttempts} attempts failed: ${String(err)}`,
-        );
+        logger.error(`safeRetry: all ${maxAttempts} attempts failed: ${String(err)}`);
         return undefined;
       }
       const delay = baseDelayMs * Math.pow(2, attempt - 1);

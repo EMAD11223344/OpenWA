@@ -92,9 +92,7 @@ export class EngineWatchdogService {
             );
             this.recordAttempt(cullTarget.id);
           } catch (err) {
-            this.logger.error(
-              `WATCHDOG: cull of session ${cullTarget.id} failed: ${String(err)}`,
-            );
+            this.logger.error(`WATCHDOG: cull of session ${cullTarget.id} failed: ${String(err)}`);
           }
         }
       }

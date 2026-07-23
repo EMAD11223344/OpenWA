@@ -70,9 +70,7 @@ export class PluginsService {
 
     // Engine mutex: when enabling an engine, disable all other engines
     if (plugin.manifest.type === PluginType.ENGINE) {
-      const otherEngines = this.pluginLoader
-        .getPluginsByType(PluginType.ENGINE)
-        .filter(p => p.manifest.id !== id);
+      const otherEngines = this.pluginLoader.getPluginsByType(PluginType.ENGINE).filter(p => p.manifest.id !== id);
 
       for (const other of otherEngines) {
         if (other.status === PluginStatus.ENABLED) {
