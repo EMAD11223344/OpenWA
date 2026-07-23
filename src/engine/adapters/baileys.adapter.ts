@@ -88,7 +88,7 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
     } catch (err) {
       this.logger.error('Baileys library not installed — run `npm install @whiskeysockets/baileys` first');
       this.setStatus(EngineStatus.FAILED);
-      throw new Error('@whiskeysockets/baileys package not found');
+      throw new Error('@whiskeysockets/baileys package not found', { cause: err });
     }
 
     // Ensure auth directory exists
@@ -122,7 +122,7 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
     // to guarantee Baileys starts completely fresh and emits a new QR code immediately.
     if (!state.creds?.me?.id && !state.creds?.registered) {
       this.logger.log(`Session ${this.sessionId} is unauthenticated — resetting auth dir to generate fresh QR.`);
-      await fs.rm(this.authDir, { recursive: true, force: true }).catch(() => { });
+      await fs.rm(this.authDir, { recursive: true, force: true }).catch(() => {});
       await fs.mkdir(this.authDir, { recursive: true });
       const freshAuth = await this.B.useMultiFileAuthState(this.authDir);
       state = freshAuth.state;
@@ -133,7 +133,9 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
     this.saveCreds = saveCreds;
 
     // Persist creds every time they're updated (multi-device rekey etc.)
-    state.creds?.id && this.logger.log(`Auth state loaded for ${this.sessionId}`);
+    if (state.creds?.id) {
+      this.logger.log(`Auth state loaded for ${this.sessionId}`);
+    }
 
     const agent = new https.Agent({
       keepAlive: true,
@@ -366,7 +368,7 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
         const incoming = this.mapIncomingMessage(msg);
         if (incoming) {
           // Download media in background — don't block message processing
-          this.downloadAndPersistMedia(msg, incoming).catch(() => { });
+          this.downloadAndPersistMedia(msg, incoming).catch(() => {});
           this.callbacks.onMessage?.(incoming);
         }
       }
@@ -377,8 +379,8 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
       const { messages, chats, contacts, isLatest } = history;
       this.logger.log(
         `History sync: ${messages?.length ?? 0} messages, ` +
-        `${chats?.length ?? 0} chats, ${contacts?.length ?? 0} contacts, ` +
-        `isLatest=${isLatest}`
+          `${chats?.length ?? 0} chats, ${contacts?.length ?? 0} contacts, ` +
+          `isLatest=${isLatest}`,
       );
       if (messages?.length) {
         for (const msg of messages) {
@@ -428,31 +430,31 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
         isGroup,
         media:
           msg.message?.imageMessage ||
-            msg.message?.videoMessage ||
-            msg.message?.audioMessage ||
-            msg.message?.documentMessage
+          msg.message?.videoMessage ||
+          msg.message?.audioMessage ||
+          msg.message?.documentMessage
             ? {
-              mimetype:
-                msg.message?.imageMessage?.mimetype ??
-                msg.message?.videoMessage?.mimetype ??
-                msg.message?.audioMessage?.mimetype ??
-                msg.message?.documentMessage?.mimetype ??
-                'application/octet-stream',
-              filename: msg.message?.documentMessage?.fileName ?? undefined,
-            }
+                mimetype:
+                  msg.message?.imageMessage?.mimetype ??
+                  msg.message?.videoMessage?.mimetype ??
+                  msg.message?.audioMessage?.mimetype ??
+                  msg.message?.documentMessage?.mimetype ??
+                  'application/octet-stream',
+                filename: msg.message?.documentMessage?.fileName ?? undefined,
+              }
             : undefined,
         quotedMessage: msg.message?.extendedTextMessage?.contextInfo?.quotedMessage
           ? {
-            id: msg.message.extendedTextMessage.contextInfo.stanzaId ?? '',
-            body: msg.message.extendedTextMessage.contextInfo.conversation ?? '',
-          }
+              id: msg.message.extendedTextMessage.contextInfo.stanzaId ?? '',
+              body: msg.message.extendedTextMessage.contextInfo.conversation ?? '',
+            }
           : undefined,
         location: msg.message?.locationMessage
           ? {
-            latitude: msg.message.locationMessage.degreesLatitude ?? 0,
-            longitude: msg.message.locationMessage.degreesLongitude ?? 0,
-            address: msg.message.locationMessage.address ?? undefined,
-          }
+              latitude: msg.message.locationMessage.degreesLatitude ?? 0,
+              longitude: msg.message.locationMessage.degreesLongitude ?? 0,
+              address: msg.message.locationMessage.address ?? undefined,
+            }
           : undefined,
       };
     } catch {
@@ -488,7 +490,7 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
 
       const ext = incoming.media.mimetype?.split('/')[1]?.split(';')[0] || 'bin';
       const mediaDir = path.join(this.authDir, 'media');
-      await fs.mkdir(mediaDir, { recursive: true }).catch(() => { });
+      await fs.mkdir(mediaDir, { recursive: true }).catch(() => {});
       const filePath = path.join(mediaDir, `${incoming.id}.${ext}`);
       await fs.writeFile(filePath, buffer);
 

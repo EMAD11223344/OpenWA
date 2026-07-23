@@ -724,10 +724,7 @@ export class SessionService implements OnModuleDestroy, OnModuleInit {
     // Try both engine paths
     const candidates =
       engineType === 'baileys'
-        ? [
-            path.join(dataDir, 'sessions', session.name, 'media'),
-            path.join(dataDir, 'sessions', sessionId, 'media'),
-          ]
+        ? [path.join(dataDir, 'sessions', session.name, 'media'), path.join(dataDir, 'sessions', sessionId, 'media')]
         : [
             path.join(dataDir, 'sessions', 'media'),
             path.join(
