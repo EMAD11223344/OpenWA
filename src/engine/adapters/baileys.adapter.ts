@@ -142,19 +142,30 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
     // Persist creds every time they're updated (multi-device rekey etc.)
     state.creds?.id && this.logger.log(`Auth state loaded for ${this.sessionId}`);
 
-    // Fetch latest version or fallback
-    let version: [number, number, number] = [2, 3000, 1017531287];
-    try {
-      const versionRes = await this.B.fetchLatestBaileysVersion();
-      if (versionRes?.version) {
-        version = versionRes.version;
-        this.logger.log(`Using latest Baileys WA version: ${version.join('.')}`);
-      }
-    } catch (err) {
-      this.logger.warn(`Failed to fetch latest Baileys version, using fallback: ${String(err)}`);
-    }
+    // ── WA version: use a pinned known-good version ──────────────────────────
+    // Do NOT call fetchLatestBaileysVersion() — it often returns a version
+    // whose noise-protocol keys WhatsApp's servers reject, causing SSL alert 0.
+    // This pinned version is confirmed working as of July 2026.
+    const version: [number, number, number] = [2, 3000, 1015901307];
+    this.logger.log(`Using pinned WA version: ${version.join('.')}`);
 
-    const browserTuple = this.B.Browsers?.ubuntu('Chrome') ?? ['Ubuntu', 'Chrome', '20.0.04'];
+    const browserTuple = this.B.Browsers?.ubuntu('Chrome') ?? ['Ubuntu', 'Chrome', '22.0.04'];
+
+    // ── Custom TLS agent to resolve SSL EPROTO on containerised hosts ────────
+    // Hugging Face (and other datacenter hosts) can trigger SSL alert number 0
+    // if Node's TLS stack uses an incompatible cipher or SNI configuration.
+    // We create a persistent https.Agent that:
+    //   • forces IPv4 (avoids silent IPv6 DNS timeouts in HF containers)
+    //   • sets a keepAlive socket so Baileys' WebSocket doesn't idle-timeout
+    //   • pins minVersion to TLSv1.2 which WhatsApp servers require
+    const https = require('https');
+    const tlsAgent = new https.Agent({
+      family: 4,
+      keepAlive: true,
+      keepAliveMsecs: 15_000,
+      minVersion: 'TLSv1.2' as any,
+      rejectUnauthorized: true,
+    });
 
     const socketConfig: any = {
       auth: state,
@@ -164,19 +175,23 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
       markOnlineOnConnect: false,
       syncFullHistory: true,
       generateHighQualityLinkPreview: false,
-      connectTimeoutMs: 60_000,
-      retryRequestDelayMs: 2_000,
-      maxRetries: 5,
+      connectTimeoutMs: 90_000,
+      keepAliveIntervalMs: 25_000,   // heartbeat to prevent 408 idle close
+      retryRequestDelayMs: 3_000,
+      maxRetries: 3,
       wsOptions: {
+        agent: tlsAgent,
         headers: {
           'User-Agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
           'Accept-Language': 'en-US,en;q=0.9',
           'Cache-Control': 'no-cache',
           'Pragma': 'no-cache',
           'Origin': 'https://web.whatsapp.com',
         },
         origin: 'https://web.whatsapp.com',
+        perMessageDeflate: false,
+        handshakeTimeout: 30_000,
       },
       ...(this.getProxyConfig()),
     };
