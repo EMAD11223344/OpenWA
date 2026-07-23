@@ -65,7 +65,7 @@ export default function Plugins() {
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [configPlugin, setConfigPlugin] = useState<Plugin | null>(null);
   const [engineConfig, setEngineConfig] = useState<EngineConfig>({
-    type: infraStatus?.engine?.type || 'whatsapp-web.js',
+    type: infraStatus?.engine?.type || 'baileys',
     headless: infraStatus?.engine?.headless ?? true,
     sessionDataPath: '/data/sessions',
     browserArgs: '--no-sandbox --disable-gpu',
@@ -118,27 +118,24 @@ export default function Plugins() {
       if (result.healthy) {
         toast.success(t('plugins.toasts.healthOk'), result.message);
       } else {
-        toast.warning(t('plugins.toasts.healthFail'), result.message);
+        toast.error(t('plugins.toasts.healthFailed'), result.message);
       }
     } catch (err) {
-      toast.error(t('plugins.toasts.healthError'), err instanceof Error ? err.message : t('common.unknownError'));
+      toast.error(t('plugins.toasts.healthFailed'), err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setActionLoading(null);
     }
   };
 
-  const handleOpenConfig = (plugin: Plugin) => {
-    setConfigPlugin(plugin);
-    setShowConfigModal(true);
-  };
-
   const handleSaveConfig = async () => {
     setSavingConfig(true);
     try {
-      toast.success(t('plugins.toasts.savedTitle'), t('plugins.toasts.savedDesc'));
+      await pluginsApi.switchEngine(engineConfig.type);
+      toast.success('Configuration Saved', 'Engine settings updated');
       setShowConfigModal(false);
+      refetchAll();
     } catch (err) {
-      toast.error(t('plugins.toasts.saveFailed'), err instanceof Error ? err.message : t('common.unknownError'));
+      toast.error('Save Failed', err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setSavingConfig(false);
     }
