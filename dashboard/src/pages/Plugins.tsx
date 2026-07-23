@@ -379,61 +379,53 @@ export default function Plugins() {
                   </div>
 
                   <div className="config-form">
+                    {/* Locked to Baileys — engine type selector removed */}
                     <div className="form-group">
-                      <label>{t('plugins.config.engineType')}</label>
-                      <select
-                        value={engineConfig.type}
-                        onChange={e => setEngineConfig({ ...engineConfig, type: e.target.value })}
-                      >
-                        <option value="whatsapp-web.js">WhatsApp Web.js</option>
-                        <option value="baileys">Baileys (WebSocket, no Chromium)</option>
-                      </select>
+                      <label>Engine</label>
+                      <div style={{
+                        display: 'flex', alignItems: 'center', gap: '10px',
+                        padding: '10px 14px', borderRadius: '8px',
+                        background: 'rgba(168,85,247,0.12)', border: '1px solid rgba(168,85,247,0.35)',
+                        color: 'var(--arena-text)', fontSize: '13px', fontWeight: 600,
+                      }}>
+                        <span style={{ fontSize: '16px' }}>⚡</span>
+                        Baileys (WebSocket, no Chromium)
+                        <span style={{ marginLeft: 'auto', fontSize: '10px', padding: '2px 8px', borderRadius: '20px', background: 'rgba(168,85,247,0.3)', color: '#c084fc', fontWeight: 700 }}>
+                          ACTIVE
+                        </span>
+                      </div>
+                      <small style={{ color: 'var(--text-muted)', fontSize: '11px', marginTop: '4px', display: 'block' }}>
+                        Pure WebSocket engine — no Chromium, no Puppeteer. Contacts, chats, and media sync via Baileys in-memory store.
+                      </small>
                     </div>
 
-                    {engineConfig.type === 'whatsapp-web.js' ? (
-                      <>
-                        <div className="form-group toggle-group">
-                          <div className="toggle-info">
-                            <label>{t('plugins.config.headless')}</label>
-                            <small>{t('plugins.config.headlessDesc')}</small>
-                          </div>
-                          <label className="toggle-switch">
-                            <input
-                              type="checkbox"
-                              checked={engineConfig.headless}
-                              onChange={e => setEngineConfig({ ...engineConfig, headless: e.target.checked })}
-                            />
-                            <span className="toggle-slider"></span>
-                          </label>
-                        </div>
+                    <div className="form-group">
+                      <label>{t('plugins.config.sessionDataPath')}</label>
+                      <input
+                        type="text"
+                        value={engineConfig.sessionDataPath}
+                        onChange={e => setEngineConfig({ ...engineConfig, sessionDataPath: e.target.value })}
+                        placeholder="/data/sessions"
+                      />
+                      <small style={{ color: 'var(--text-muted)', fontSize: '11px', marginTop: '4px', display: 'block' }}>
+                        Auth state, contacts store, and media files are saved here. Use <code>/data/sessions</code> on Hugging Face.
+                      </small>
+                    </div>
 
-                        <div className="form-group">
-                          <label>{t('plugins.config.sessionDataPath')}</label>
-                          <input
-                            type="text"
-                            value={engineConfig.sessionDataPath}
-                            onChange={e => setEngineConfig({ ...engineConfig, sessionDataPath: e.target.value })}
-                          />
-                        </div>
-
-                        <div className="form-group">
-                          <label>{t('plugins.config.browserArgs')}</label>
-                          <input
-                            type="text"
-                            value={engineConfig.browserArgs}
-                            onChange={e => setEngineConfig({ ...engineConfig, browserArgs: e.target.value })}
-                            placeholder="--no-sandbox --disable-gpu"
-                          />
-                        </div>
-                      </>
-                    ) : (
-                      <div className="form-group">
-                        <small style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
-                          Baileys uses pure WebSocket — no headless browser, session data path, or browser args needed.
-                          Set <code>ENGINE=baileys</code> in your Space environment variables to activate.
-                        </small>
+                    <div className="form-group toggle-group">
+                      <div className="toggle-info">
+                        <label>Sync Full History on Connect</label>
+                        <small>When enabled, WhatsApp streams all past chats and contacts on first pair.</small>
                       </div>
-                    )}
+                      <label className="toggle-switch">
+                        <input
+                          type="checkbox"
+                          checked={engineConfig.headless}
+                          onChange={e => setEngineConfig({ ...engineConfig, headless: e.target.checked })}
+                        />
+                        <span className="toggle-slider"></span>
+                      </label>
+                    </div>
                   </div>
                 </>
               ) : (

@@ -397,34 +397,16 @@ export function Infrastructure() {
           </div>
 
           <div className="radio-group">
-            <label className={`radio-option ${engineType === 'baileys' ? 'selected' : ''}`}>
-              <input
-                type="radio"
-                name="engineType"
-                checked={engineType === 'baileys'}
-                onChange={() => setEngineType('baileys')}
-              />
-              <span style={{ fontSize: '2rem', opacity: 0.3, position: 'absolute', top: '12px', right: '12px' }}>⚡</span>
-              <span>Baileys</span>
-              <small>Pure WebSocket — lightweight, low memory, fast reconnect. Recommended for most deployments.</small>
-            </label>
-            <label className={`radio-option ${engineType === 'whatsapp-web.js' ? 'selected' : ''}`}>
-              <input
-                type="radio"
-                name="engineType"
-                checked={engineType === 'whatsapp-web.js'}
-                onChange={() => setEngineType('whatsapp-web.js')}
-              />
-              <span style={{ fontSize: '2rem', opacity: 0.3, position: 'absolute', top: '12px', right: '12px' }}>🌐</span>
-              <span>WhatsApp Web.js</span>
-              <small>Chromium-based — full browser emulation, higher memory usage, slower startup.</small>
+            <label className="radio-option selected" style={{ cursor: 'default' }}>
+              <input type="radio" name="engineType" checked readOnly />
+              <span style={{ fontSize: '2rem', opacity: 0.4, position: 'absolute', top: '12px', right: '12px' }}>⚡</span>
+              <span>Baileys (WebSocket, no Chromium)</span>
+              <small>Pure WebSocket — lightweight, low memory, fast reconnect. Contacts, chats and media sync via in-memory store.</small>
             </label>
           </div>
 
-          <div style={{ padding: '0.75rem 1rem', marginTop: '0.75rem', background: engineType === 'baileys' ? 'rgba(34,197,94,0.08)' : 'rgba(251,191,36,0.08)', borderRadius: '8px', border: `1px solid ${engineType === 'baileys' ? 'rgba(34,197,94,0.2)' : 'rgba(251,191,36,0.2)'}`, fontSize: '0.8125rem', color: '#475569', lineHeight: 1.5 }}>
-            {engineType === 'baileys'
-              ? '⚡ Baileys connects directly via WebSocket — no browser needed. Faster, uses ~100MB less RAM. Works on headless servers without Chrome.'
-              : '🌐 WhatsApp Web.js runs a full Chromium browser. Slower startup (~10-15s), uses ~300MB RAM. More compatible with some WhatsApp features but heavier.'}
+          <div style={{ padding: '0.75rem 1rem', marginTop: '0.75rem', background: 'rgba(34,197,94,0.08)', borderRadius: '8px', border: '1px solid rgba(34,197,94,0.2)', fontSize: '0.8125rem', color: '#475569', lineHeight: 1.5 }}>
+            ⚡ Baileys connects directly via WebSocket — no browser needed. Faster, uses ~100MB less RAM. Full contact, chat, and media history sync on connect.
           </div>
         </section>
 
