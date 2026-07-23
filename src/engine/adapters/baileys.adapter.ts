@@ -371,6 +371,24 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
         }
       }
     });
+
+    // ── History sync (messaging-history.set) ─────────────────────────────────
+    s.ev.on('messaging-history.set', (history: any) => {
+      const { messages, chats, contacts, isLatest } = history;
+      this.logger.log(
+        `History sync: ${messages?.length ?? 0} messages, ` +
+        `${chats?.length ?? 0} chats, ${contacts?.length ?? 0} contacts, ` +
+        `isLatest=${isLatest}`
+      );
+      if (messages?.length) {
+        for (const msg of messages) {
+          const incoming = this.mapIncomingMessage(msg);
+          if (incoming) {
+            this.callbacks.onMessage?.(incoming);
+          }
+        }
+      }
+    });
   }
 
   private mapIncomingMessage(msg: any): IncomingMessage | null {
