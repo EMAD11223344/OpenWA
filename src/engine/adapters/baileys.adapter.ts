@@ -134,43 +134,16 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
     // Persist creds every time they're updated (multi-device rekey etc.)
     state.creds?.id && this.logger.log(`Auth state loaded for ${this.sessionId}`);
 
-    // ── WA version: fetch the actual latest from WhatsApp's manifest ──────────
-    // fetchLatestWaWebVersion() queries WhatsApp's real version manifest directly.
-    let version: [number, number, number] = [2, 3000, 1023223821];
-    try {
-      const result = await this.B.fetchLatestWaWebVersion({ timeout: 10_000 });
-      if (result.isLatest && result.version) {
-        version = result.version;
-        this.logger.log(`Fetched live WA version: ${version.join('.')}`);
-      } else {
-        this.logger.warn(`fetchLatestWaWebVersion returned isLatest=${result.isLatest}, using bundled version`);
-      }
-    } catch (err) {
-      this.logger.warn(`Failed to fetch live WA version, using bundled: ${String(err)}`);
-    }
-
-    const browserTuple = this.B.Browsers?.macOS('Chrome') ?? ['macOS', 'Chrome', '22.0.04'];
-
     const socketConfig: any = {
       auth: state,
-      version,
-      browser: browserTuple,
+      browser: this.B.Browsers?.macOS('Desktop') ?? ['Mac OS', 'Desktop', '14.4.1'],
       printQRInTerminal: this.printQR,
       markOnlineOnConnect: false,
       syncFullHistory: false,
       generateHighQualityLinkPreview: false,
-      connectTimeoutMs: 120_000,
-      keepAliveIntervalMs: 30_000,
+      connectTimeoutMs: 60_000,
       retryRequestDelayMs: 2_000,
-      maxRetries: 5,
-      options: {
-        headers: {
-          'User-Agent':
-            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
-          'Accept-Language': 'en-US,en;q=0.9',
-          'Origin': 'https://web.whatsapp.com',
-        },
-      },
+      maxRetries: 3,
       ...(this.getProxyConfig()),
     };
 
