@@ -142,12 +142,22 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
     // Persist creds every time they're updated (multi-device rekey etc.)
     state.creds?.id && this.logger.log(`Auth state loaded for ${this.sessionId}`);
 
-    // ── WA version: use a pinned known-good version ──────────────────────────
-    // Do NOT call fetchLatestBaileysVersion() — it often returns a version
-    // whose noise-protocol keys WhatsApp's servers reject, causing SSL alert 0.
-    // This pinned version is confirmed working as of July 2026.
-    const version: [number, number, number] = [2, 3000, 1015901307];
-    this.logger.log(`Using pinned WA version: ${version.join('.')}`);
+    // ── WA version: fetch the actual latest from WhatsApp's manifest ──────────
+    // Do NOT use fetchLatestBaileysVersion() — it returns a stale version that
+    // WhatsApp's servers reject, blocking QR/pairing (see WhiskeySockets#2679).
+    // fetchLatestWaWebVersion() queries WhatsApp's real version manifest directly.
+    let version: [number, number, number] = [2, 3000, 1015901307];
+    try {
+      const { version: liveVersion, isLatest } = await this.B.fetchLatestWaWebVersion();
+      if (isLatest && liveVersion) {
+        version = liveVersion;
+        this.logger.log(`Fetched live WA version: ${version.join('.')}`);
+      } else {
+        this.logger.warn(`fetchLatestWaWebVersion returned isLatest=${isLatest}, falling back to pinned version`);
+      }
+    } catch (err) {
+      this.logger.warn(`Failed to fetch live WA version, using pinned fallback: ${String(err)}`);
+    }
 
     const browserTuple = this.B.Browsers?.ubuntu('Chrome') ?? ['Ubuntu', 'Chrome', '22.0.04'];
 
