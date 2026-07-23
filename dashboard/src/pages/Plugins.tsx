@@ -127,6 +127,11 @@ export default function Plugins() {
     }
   };
 
+  const handleOpenConfig = (plugin: Plugin) => {
+    setConfigPlugin(plugin);
+    setShowConfigModal(true);
+  };
+
   const handleSaveConfig = async () => {
     setSavingConfig(true);
     try {
