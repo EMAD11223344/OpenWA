@@ -150,7 +150,6 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
       syncFullHistory: false,
       generateHighQualityLinkPreview: false,
       connectTimeoutMs: 60_000,
-      defaultQueryTimeoutMs: undefined,
       retryRequestDelayMs: 2_000,
       maxRetries: 3,
       agent,
