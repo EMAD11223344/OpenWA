@@ -1,7 +1,6 @@
 import { EventEmitter } from 'events';
 import path from 'path';
 import fs from 'fs/promises';
-import https from 'https';
 import * as qrcode from 'qrcode';
 import {
   IWhatsAppEngine,
@@ -152,15 +151,6 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
 
     const browserTuple = this.B.Browsers?.macOS('Chrome') ?? ['macOS', 'Chrome', '22.0.04'];
 
-    // ── Custom TLS agent to resolve SSL EPROTO on containerised hosts ────────
-    const httpsAgent = new https.Agent({
-      family: 4,
-      keepAlive: true,
-      keepAliveMsecs: 15_000,
-      minVersion: 'TLSv1.2' as any,
-      rejectUnauthorized: true,
-    });
-
     const socketConfig: any = {
       auth: state,
       version,
@@ -169,18 +159,15 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
       markOnlineOnConnect: false,
       syncFullHistory: false,
       generateHighQualityLinkPreview: false,
-      connectTimeoutMs: 20_000,
+      connectTimeoutMs: 120_000,
       keepAliveIntervalMs: 30_000,
       retryRequestDelayMs: 2_000,
       maxRetries: 5,
-      agent: httpsAgent,
       options: {
         headers: {
           'User-Agent':
             'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
           'Accept-Language': 'en-US,en;q=0.9',
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache',
           'Origin': 'https://web.whatsapp.com',
         },
       },
