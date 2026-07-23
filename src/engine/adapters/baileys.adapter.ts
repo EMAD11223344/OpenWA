@@ -136,19 +136,38 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
       this.logger.log(`Auth state loaded for ${this.sessionId}`);
     }
 
-    // Fetch latest WA Web version to avoid protocol mismatch with WhatsApp servers
-    const { version } = await this.B.fetchLatestBaileysVersion();
-    this.logger.log(`Using WA Web version: ${version.join('.')}`);
+    // Fetch latest version or fallback
+    let version: [number, number, number] = [2, 3000, 1017531287];
+    try {
+      const versionRes = await this.B.fetchLatestBaileysVersion();
+      if (versionRes?.version) {
+        version = versionRes.version;
+        this.logger.log(`Using latest Baileys WA version: ${version.join('.')}`);
+      }
+    } catch (err) {
+      this.logger.warn(`Failed to fetch latest Baileys version, using fallback: ${String(err)}`);
+    }
 
-    // Create the socket
+    const browserTuple = this.B.Browsers?.ubuntu?.('Chrome') ?? ['Ubuntu', 'Chrome', '20.0.04'];
+
+    // Create the socket with valid 3-string browser tuple
     this.socket = this.B.makeWASocket({
       auth: state,
       version,
-      browser: this.B.Browsers?.macOS?.('Desktop') ?? ['Mac OS', 'Desktop', '14.4.1'],
+      browser: browserTuple,
       printQRInTerminal: this.printQR,
       markOnlineOnConnect: false,
       syncFullHistory: false,
+      connectTimeoutMs: 60_000,
+      retryRequestDelayMs: 2_000,
+      maxRetries: 5,
       generateHighQualityLinkPreview: false,
+      options: {
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        },
+      },
       ...this.getProxyConfig(),
     });
 
