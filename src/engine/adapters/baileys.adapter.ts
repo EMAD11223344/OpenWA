@@ -151,9 +151,9 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
       markOnlineOnConnect: false,
       syncFullHistory: false,
       generateHighQualityLinkPreview: false,
-      connectTimeoutMs: 60_000,
-      retryRequestDelayMs: 2_000,
-      maxRetries: 3,
+      connectTimeoutMs: 30_000,
+      retryRequestDelayMs: 5_000,
+      maxRetries: 10,
       agent,
       ...this.getProxyConfig(),
     };
