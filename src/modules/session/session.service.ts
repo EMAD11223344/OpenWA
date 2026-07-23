@@ -16,6 +16,8 @@ import { createLogger } from '../../common/services/logger.service';
 import { EventsGateway } from '../events/events.gateway';
 import { WebhookService } from '../webhook/webhook.service';
 import { HookManager } from '../../core/hooks';
+import path from 'path';
+import fs from 'fs/promises';
 
 interface ReconnectState {
   attempts: number;
@@ -717,24 +719,22 @@ export class SessionService implements OnModuleDestroy, OnModuleInit {
     const engineType = typeof session.config?.engine === 'string' ? session.config.engine : 'whatsapp-web.js';
     const dataBase =
       this.engineFactory['configService']?.get<string>('dataDatabase.database') ?? './data/openwa.sqlite';
-    const dataDir = require('path').dirname(dataBase);
+    const dataDir = path.dirname(dataBase);
 
     // Try both engine paths
     const candidates =
       engineType === 'baileys'
         ? [
-            require('path').join(dataDir, 'sessions', session.name, 'media'),
-            require('path').join(dataDir, 'sessions', sessionId, 'media'),
+            path.join(dataDir, 'sessions', session.name, 'media'),
+            path.join(dataDir, 'sessions', sessionId, 'media'),
           ]
         : [
-            require('path').join(dataDir, 'sessions', 'media'),
-            require('path').join(
+            path.join(dataDir, 'sessions', 'media'),
+            path.join(
               this.engineFactory['configService']?.get<string>('engine.sessionDataPath') ?? './data/sessions',
               'media',
             ),
           ];
-
-    const fs = require('fs/promises');
     for (const dir of candidates) {
       // Scan for any extension matching the messageId
       try {
@@ -755,7 +755,7 @@ export class SessionService implements OnModuleDestroy, OnModuleInit {
             pdf: 'application/pdf',
             bin: 'application/octet-stream',
           };
-          return { filePath: require('path').join(dir, match), mimeType: mimeMap[ext] || 'application/octet-stream' };
+          return { filePath: path.join(dir, match), mimeType: mimeMap[ext] || 'application/octet-stream' };
         }
       } catch {
         /* dir doesn't exist */
