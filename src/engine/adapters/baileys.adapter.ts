@@ -30,13 +30,6 @@ import {
 } from '../interfaces/whatsapp-engine.interface';
 import { createLogger } from '../../common/services/logger.service';
 
-// Force IPv4 HTTPS Agent to prevent IPv6 silent connection timeouts in container environments (Hugging Face / Docker)
-const httpsAgent = new https.Agent({
-  keepAlive: true,
-  family: 4,
-  timeout: 30000,
-});
-
 export interface BaileysAdapterConfig {
   sessionId: string;
   authDir: string;
@@ -143,33 +136,24 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
     state.creds?.id && this.logger.log(`Auth state loaded for ${this.sessionId}`);
 
     // ── WA version: fetch the actual latest from WhatsApp's manifest ──────────
-    // Do NOT use fetchLatestBaileysVersion() — it returns a stale version that
-    // WhatsApp's servers reject, blocking QR/pairing (see WhiskeySockets#2679).
     // fetchLatestWaWebVersion() queries WhatsApp's real version manifest directly.
-    let version: [number, number, number] = [2, 3000, 1015901307];
+    let version: [number, number, number] = [2, 3000, 1023223821];
     try {
-      const { version: liveVersion, isLatest } = await this.B.fetchLatestWaWebVersion();
-      if (isLatest && liveVersion) {
-        version = liveVersion;
+      const result = await this.B.fetchLatestWaWebVersion({ timeout: 10_000 });
+      if (result.isLatest && result.version) {
+        version = result.version;
         this.logger.log(`Fetched live WA version: ${version.join('.')}`);
       } else {
-        this.logger.warn(`fetchLatestWaWebVersion returned isLatest=${isLatest}, falling back to pinned version`);
+        this.logger.warn(`fetchLatestWaWebVersion returned isLatest=${result.isLatest}, using bundled version`);
       }
     } catch (err) {
-      this.logger.warn(`Failed to fetch live WA version, using pinned fallback: ${String(err)}`);
+      this.logger.warn(`Failed to fetch live WA version, using bundled: ${String(err)}`);
     }
 
-    const browserTuple = this.B.Browsers?.ubuntu('Chrome') ?? ['Ubuntu', 'Chrome', '22.0.04'];
+    const browserTuple = this.B.Browsers?.macOS('Chrome') ?? ['macOS', 'Chrome', '22.0.04'];
 
     // ── Custom TLS agent to resolve SSL EPROTO on containerised hosts ────────
-    // Hugging Face (and other datacenter hosts) can trigger SSL alert number 0
-    // if Node's TLS stack uses an incompatible cipher or SNI configuration.
-    // We create a persistent https.Agent that:
-    //   • forces IPv4 (avoids silent IPv6 DNS timeouts in HF containers)
-    //   • sets a keepAlive socket so Baileys' WebSocket doesn't idle-timeout
-    //   • pins minVersion to TLSv1.2 which WhatsApp servers require
-    const https = require('https');
-    const tlsAgent = new https.Agent({
+    const httpsAgent = new https.Agent({
       family: 4,
       keepAlive: true,
       keepAliveMsecs: 15_000,
@@ -183,21 +167,22 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
       browser: browserTuple,
       printQRInTerminal: this.printQR,
       markOnlineOnConnect: false,
-      syncFullHistory: true,
+      syncFullHistory: false,
       generateHighQualityLinkPreview: false,
-      connectTimeoutMs: 60_000,
+      connectTimeoutMs: 20_000,
+      keepAliveIntervalMs: 30_000,
       retryRequestDelayMs: 2_000,
       maxRetries: 5,
-      wsOptions: {
+      agent: httpsAgent,
+      options: {
         headers: {
           'User-Agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
           'Accept-Language': 'en-US,en;q=0.9',
           'Cache-Control': 'no-cache',
           'Pragma': 'no-cache',
           'Origin': 'https://web.whatsapp.com',
         },
-        origin: 'https://web.whatsapp.com',
       },
       ...(this.getProxyConfig()),
     };
