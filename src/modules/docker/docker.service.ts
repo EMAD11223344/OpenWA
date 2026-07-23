@@ -302,10 +302,10 @@ export class DockerService implements OnModuleInit {
           NetworkMode: 'openwa-network',
           RestartPolicy: { Name: 'unless-stopped' },
           Binds: spec.volumes?.map(v => `${v.name}:${v.path}`),
-          PortBindings: spec.ports?.reduce((acc, p) => {
+          PortBindings: spec.ports?.reduce((acc: Record<string, { HostIp: string; HostPort: string }[]>, p) => {
             acc[`${p.container}/tcp`] = [{ HostIp: '127.0.0.1', HostPort: p.host.toString() }];
             return acc;
-          }, {}),
+          }, {} as Record<string, { HostIp: string; HostPort: string }[]>),
         },
         Healthcheck: spec.healthcheck
           ? {
