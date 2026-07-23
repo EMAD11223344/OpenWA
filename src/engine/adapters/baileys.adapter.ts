@@ -1,6 +1,7 @@
 import { EventEmitter } from 'events';
 import path from 'path';
 import fs from 'fs/promises';
+import https from 'https';
 import * as qrcode from 'qrcode';
 import {
   IWhatsAppEngine,
@@ -136,6 +137,13 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
       this.logger.log(`Auth state loaded for ${this.sessionId}`);
     }
 
+    const agent = new https.Agent({
+      keepAlive: true,
+      keepAliveMsecs: 30_000,
+      maxSockets: 2,
+      rejectUnauthorized: true,
+    });
+
     const socketConfig: any = {
       auth: state,
       browser: this.B.Browsers?.macOS('Desktop') ?? ['Mac OS', 'Desktop', '14.4.1'],
@@ -146,6 +154,7 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
       connectTimeoutMs: 60_000,
       retryRequestDelayMs: 5_000,
       maxRetries: 10,
+      agent,
       ...this.getProxyConfig(),
     };
 
