@@ -16,7 +16,7 @@
     "dashboard:install": "cd dashboard && npm install",
     "dashboard:dev": "cd dashboard && npm run dev",
     "dashboard:build": "cd dashboard && npm run build",
-    "postinstall": "patch-package && [ -d dashboard ] && npm run dashboard:install || true",
+    "postinstall": "node -e \"var fs=require('fs'),p='node_modules/@whiskeysockets/baileys/lib/Utils/validate-connection.js';fs.writeFileSync(p,fs.readFileSync(p,'utf8').replace('UserAgent.Platform.WEB','UserAgent.Platform.MACOS'))\" && [ -d dashboard ] && npm run dashboard:install || true",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "jest",
     "test:watch": "jest --watch",
