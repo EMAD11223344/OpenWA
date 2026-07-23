@@ -145,20 +145,12 @@ export class EngineFactory implements OnModuleInit {
   }
 
   private createFallbackEngine(options: EngineCreateOptions): IWhatsAppEngine {
-    // Legacy direct creation (fallback)
-    return new WhatsAppWebJsAdapter({
+    // Baileys direct creation
+    const { BaileysAdapter } = require('./adapters/baileys.adapter');
+    const sessionDataPath = this.configService.get<string>('engine.sessionDataPath') ?? './data/sessions';
+    return new BaileysAdapter({
       sessionId: options.sessionId,
-      sessionDataPath: this.configService.get<string>('engine.sessionDataPath') ?? './data/sessions',
-      puppeteer: {
-        headless: this.configService.get<boolean>('engine.puppeteer.headless') ?? true,
-        args: this.configService.get<string[]>('engine.puppeteer.args') ?? ['--no-sandbox', '--disable-setuid-sandbox'],
-      },
-      proxy: options.proxyUrl
-        ? {
-            url: options.proxyUrl,
-            type: options.proxyType ?? 'http',
-          }
-        : undefined,
+      authDir: `${sessionDataPath}/${options.sessionId}`,
     });
   }
 

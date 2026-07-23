@@ -373,6 +373,18 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
     s.ev.on('messages.upsert', (messageUpdate: any) => {
       const messages = messageUpdate.messages ?? [];
       for (const msg of messages) {
+        // Auto-upsert sender into store.contacts if not present
+        if (msg.key?.remoteJid && this.store?.contacts) {
+          const fromJid = msg.key.remoteJid;
+          if (!this.store.contacts[fromJid]) {
+            this.store.contacts[fromJid] = {
+              id: fromJid,
+              name: msg.pushName ?? fromJid.replace(/@.*$/, ''),
+              notify: msg.pushName ?? undefined,
+            };
+          }
+        }
+
         if (messageUpdate.type !== 'notify') continue; // skip historical sync
         if (msg.key?.fromMe) continue; // skip own messages
 
@@ -483,10 +495,43 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
     for (const ext of ['jpg', 'jpeg', 'png', 'webp', 'gif', 'mp4', 'ogg', 'opus', 'mp3', 'pdf', 'bin']) {
       const p = path.join(mediaDir, `${messageId}.${ext}`);
       try {
-        return p;
+        if (require('fs').existsSync(p)) return p;
       } catch { /* ignore */ }
     }
     return null;
+  }
+
+  // ─── Chats & Message History ──────────────────────────────────────────────────
+
+  async getChats(): Promise<any[]> {
+    this.ensureReady();
+    const chatsMap = this.store?.chats ?? {};
+    const chats = Object.values(chatsMap);
+    if (chats.length > 0) {
+      return chats.map((c: any) => ({
+        id: c.id,
+        name: c.name ?? c.notify ?? c.id.replace(/@.*$/, ''),
+        unreadCount: c.unreadCount ?? 0,
+        timestamp: c.conversationTimestamp ?? Math.floor(Date.now() / 1000),
+        isGroup: c.id?.endsWith('@g.us') ?? false,
+      }));
+    }
+    const storeContacts = this.store?.contacts ?? {};
+    return Object.entries(storeContacts).map(([id, data]: [string, any]) => ({
+      id,
+      name: data.name ?? data.notify ?? id.replace(/@.*$/, ''),
+      unreadCount: 0,
+      timestamp: Math.floor(Date.now() / 1000),
+      isGroup: id.endsWith('@g.us'),
+    }));
+  }
+
+  async getMessageHistory(chatId: string, limit = 50): Promise<IncomingMessage[]> {
+    this.ensureReady();
+    const resolved = this.resolveJid(chatId);
+    const messages = this.store?.messages?.[resolved] ?? [];
+    const list = Array.isArray(messages) ? messages.slice(-limit) : Object.values(messages).slice(-limit);
+    return list.map((msg: any) => this.mapIncomingMessage(msg)).filter(Boolean) as IncomingMessage[];
   }
 
   // ─── Messaging: Basic ────────────────────────────────────────────────────────
