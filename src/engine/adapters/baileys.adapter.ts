@@ -136,26 +136,19 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
       this.logger.log(`Auth state loaded for ${this.sessionId}`);
     }
 
-    // Fetch latest WA Web version — matches official Baileys guide
+    // Fetch latest WA Web version to avoid protocol mismatch with WhatsApp servers
     const { version } = await this.B.fetchLatestBaileysVersion();
     this.logger.log(`Using WA Web version: ${version.join('.')}`);
 
-    const logger = this.B.P?.({ level: 'silent' }) ?? this.B.default?.({ level: 'silent' });
-
-    // Create the socket — follows official Baileys guide exactly
+    // Create the socket
     this.socket = this.B.makeWASocket({
+      auth: state,
       version,
-      logger,
-      auth: {
-        creds: state.creds,
-        keys: this.B.makeCacheableSignalKeyStore(state.keys, logger),
-      },
       browser: this.B.Browsers?.macOS?.('Desktop') ?? ['Mac OS', 'Desktop', '14.4.1'],
       printQRInTerminal: this.printQR,
       markOnlineOnConnect: false,
       syncFullHistory: false,
       generateHighQualityLinkPreview: false,
-      getMessage: async () => undefined,
       ...this.getProxyConfig(),
     });
 
