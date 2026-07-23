@@ -38,11 +38,15 @@ export class BaileysPlugin implements IEnginePlugin {
     const authDir =
       (config.authDir as string) ?? (this.context?.config.authDir as string) ?? `./data/sessions/${sessionId}`;
     const printQR = (config.printQR as boolean) ?? (this.context?.config.printQR as boolean) ?? false;
+    const proxyUrl = (config.proxyUrl as string) ?? (this.context?.config.proxyUrl as string) ?? undefined;
+    const proxyType = (config.proxyType as string) ?? (this.context?.config.proxyType as string) ?? undefined;
 
     return new BaileysAdapter({
       sessionId,
       authDir,
       printQR,
+      proxyUrl,
+      proxyType: proxyType as 'http' | 'https' | 'socks4' | 'socks5' | undefined,
     });
   }
 

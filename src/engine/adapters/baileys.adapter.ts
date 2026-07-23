@@ -33,6 +33,14 @@ export interface BaileysAdapterConfig {
   sessionId: string;
   authDir: string;
   printQR?: boolean;
+  /**
+   * Optional residential proxy URL (e.g. `socks5://user:pass@host:1080` or
+   * `http://user:pass@host:8080`). Required on hosts whose IP range is
+   * rejected by WhatsApp's WebSocket TLS handshake (Hugging Face, etc.).
+   */
+  proxyUrl?: string;
+  /** Proxy protocol. Defaults to `http` when proxyUrl is set. */
+  proxyType?: 'http' | 'https' | 'socks4' | 'socks5';
 }
 
 /**
@@ -65,12 +73,16 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
   private readonly sessionId: string;
   private readonly authDir: string;
   private readonly printQR: boolean;
+  private readonly proxyUrl?: string;
+  private readonly proxyType: 'http' | 'https' | 'socks4' | 'socks5';
 
   constructor(config: BaileysAdapterConfig) {
     super();
     this.sessionId = config.sessionId;
     this.authDir = config.authDir;
     this.printQR = config.printQR ?? false;
+    this.proxyUrl = config.proxyUrl;
+    this.proxyType = config.proxyType ?? 'http';
   }
 
   // ─── Lifecycle ───────────────────────────────────────────────────────────────
@@ -81,7 +93,7 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
 
     try {
       // Lazy-require baileys so the module is optional at startup.
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
+
       const baileys = require('@whiskeysockets/baileys');
       this.B = baileys;
     } catch (err) {
@@ -177,7 +189,19 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
     }
 
     this.setupEventHandlers();
-    this.logger.log(`Baileys socket created for session ${this.sessionId}`);
+    this.logger.log(`Baileys socket created for session ${this.sessionId}`, {
+      sessionId: this.sessionId,
+      proxyEnabled: !!this.proxyUrl,
+      proxyType: this.proxyUrl ? this.proxyType : undefined,
+      connectTimeoutMs: 60_000,
+    });
+
+    if (!this.proxyUrl) {
+      this.logger.warn(
+        `No proxy configured for session ${this.sessionId}. If QR codes never appear, set WHATSAPP_PROXY_URL env or per-session proxyUrl — WhatsApp blocks TLS handshakes from datacenter IP ranges (HF/AWS/GCP).`,
+        { sessionId: this.sessionId, action: 'proxy_missing_hint' },
+      );
+    }
   }
 
   async disconnect(): Promise<void> {
@@ -273,8 +297,35 @@ export class BaileysAdapter extends EventEmitter implements IWhatsAppEngine {
   }
 
   private getProxyConfig(): Record<string, unknown> {
-    // Proxy support can be added via config
-    return {};
+    if (!this.proxyUrl) {
+      return {};
+    }
+
+    // Baileys' `makeWASocket` accepts `agent?: Agent` (Node https.Agent) which
+    // is forwarded to the underlying WebSocket and to `fetch`. We lazily require
+    // the proxy-agent packages so the module stays optional.
+    try {
+      if (this.proxyType === 'socks4' || this.proxyType === 'socks5') {
+        const { SocksProxyAgent } = require('socks-proxy-agent') as {
+          SocksProxyAgent: new (url: string) => unknown;
+        };
+        return { agent: new SocksProxyAgent(this.proxyUrl) as never };
+      }
+
+      // Both 'http' and 'https' use HttpsProxyAgent — WA servers are always https
+
+      const { HttpsProxyAgent } = require('https-proxy-agent') as {
+        HttpsProxyAgent: new (url: string) => unknown;
+      };
+      return { agent: new HttpsProxyAgent(this.proxyUrl) as never };
+    } catch (err) {
+      this.logger.error(
+        `Proxy requested (${this.proxyType}) but the proxy-agent package is missing — install https-proxy-agent and socks-proxy-agent. Falling back to direct connection (SSL rejection likely).`,
+        undefined,
+        { sessionId: this.sessionId, error: String(err) },
+      );
+      return {};
+    }
   }
 
   private setupEventHandlers(): void {

@@ -53,7 +53,6 @@ export class EngineFactory implements OnModuleInit {
     // Register Baileys as built-in plugin (no-op until `engineType=baileys`
     // is selected via env or per-session override).
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { BaileysPlugin } = require('../plugins/engines/baileys') as {
         BaileysPlugin: { new (): unknown };
       };
@@ -108,7 +107,6 @@ export class EngineFactory implements OnModuleInit {
     // the direct constructor path if executable.
     if (engineType === 'baileys') {
       try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
         const { BaileysAdapter } = require('../engine/adapters/baileys.adapter') as {
           BaileysAdapter: { new (cfg: unknown): IWhatsAppEngine };
         };
@@ -116,6 +114,8 @@ export class EngineFactory implements OnModuleInit {
         return new BaileysAdapter({
           sessionId: options.sessionId,
           authDir: dataDir + '/' + options.sessionId,
+          proxyUrl: options.proxyUrl,
+          proxyType: options.proxyType,
         });
       } catch (err) {
         this.logger.error(`BaileysPlugin.requested but BaileysAdapter not built: ${String(err)}`);
@@ -149,6 +149,8 @@ export class EngineFactory implements OnModuleInit {
     return new BaileysAdapter({
       sessionId: options.sessionId,
       authDir: `${sessionDataPath}/${options.sessionId}`,
+      proxyUrl: options.proxyUrl,
+      proxyType: options.proxyType,
     });
   }
 
