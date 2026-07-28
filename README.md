@@ -5,6 +5,7 @@ colorFrom: blue
 colorTo: green
 sdk: docker
 app_port: 7860
+pinned: false
 ---
 
 <p align="center">
@@ -15,10 +16,3 @@ app_port: 7860
 <p align="center">
   <strong> WhatsApp API Gateway</strong>
 </p>
-
-
-<br/>
-
-<sub> <a href="https://github.com/rmyndharis"></sub>
-
-</div>
