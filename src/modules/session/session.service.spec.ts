@@ -68,6 +68,7 @@ describe('SessionService', () => {
 
     engineFactory = {
       create: jest.fn().mockReturnValue(mockEngine),
+      getCurrentEngine: jest.fn().mockReturnValue('baileys'),
     };
 
     eventsGateway = {
@@ -277,11 +278,13 @@ describe('SessionService', () => {
   // ── getQRCode ─────────────────────────────────────────────────────
 
   describe('getQRCode', () => {
-    it('should throw BadRequestException if engine not started', async () => {
+    it('should return error if engine not started', async () => {
       const session = createMockSession();
       (repository.findOne as jest.Mock).mockResolvedValue(session);
 
-      await expect(service.getQRCode('sess-uuid-1')).rejects.toThrow(BadRequestException);
+      const result = await service.getQRCode('sess-uuid-1');
+      expect(result.qrCode).toBe('');
+      expect(result.error).toContain('not started');
     });
 
     it('should return QR code from engine', async () => {
@@ -297,7 +300,7 @@ describe('SessionService', () => {
       expect(result.qrCode).toBe('data:image/png;base64,iVBOR...');
     });
 
-    it('should throw if session is READY (already authenticated)', async () => {
+    it('should return error if session is READY (already authenticated)', async () => {
       const session = createMockSession({ status: SessionStatus.READY });
       (repository.findOne as jest.Mock).mockResolvedValue(session);
       (repository.update as jest.Mock).mockResolvedValue({ affected: 1 });
@@ -305,7 +308,9 @@ describe('SessionService', () => {
       await service.start('sess-uuid-1');
       mockEngine.getQRCode.mockReturnValue(null);
 
-      await expect(service.getQRCode('sess-uuid-1')).rejects.toThrow('already authenticated');
+      const result = await service.getQRCode('sess-uuid-1');
+      expect(result.qrCode).toBe('');
+      expect(result.error).toContain('already authenticated');
     });
   });
 

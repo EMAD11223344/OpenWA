@@ -186,7 +186,7 @@ function osTotalMemMB(): number {
   try {
     // Lazy require so this file still imports cleanly in pure-node test envs
     // where the global `os` is shadowed by anything.
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+
     const os = require('node:os');
     return Math.floor(os.totalmem() / 1024 / 1024);
   } catch {

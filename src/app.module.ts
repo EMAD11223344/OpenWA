@@ -31,7 +31,6 @@ import { PluginsApiModule } from './modules/plugins/plugins.module';
 // Only import QueueModule if explicitly enabled to avoid Redis connection errors
 const queueModules: Array<Type | DynamicModule> = [];
 if (process.env.QUEUE_ENABLED === 'true') {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const queueModule = require('./modules/queue/queue.module') as {
     QueueModule: Type;
   };

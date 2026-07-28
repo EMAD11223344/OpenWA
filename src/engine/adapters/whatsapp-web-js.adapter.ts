@@ -913,7 +913,6 @@ export class WhatsAppWebJsAdapter extends EventEmitter implements IWhatsAppEngin
 
   // ========== Status/Stories (Phase 3) ==========
   // Note: These are stub implementations - whatsapp-web.js has limited Status API support
-  /* eslint-disable @typescript-eslint/require-await, @typescript-eslint/no-unused-vars */
 
   async getContactStatuses(): Promise<Status[]> {
     this.ensureReady();
@@ -984,8 +983,6 @@ export class WhatsAppWebJsAdapter extends EventEmitter implements IWhatsAppEngin
     this.ensureReady();
     throw new Error('sendCatalog not yet implemented in whatsapp-web.js adapter');
   }
-
-  /* eslint-enable @typescript-eslint/require-await, @typescript-eslint/no-unused-vars */
 
   private ensureReady(): void {
     if (this.status !== EngineStatus.READY || !this.client) {

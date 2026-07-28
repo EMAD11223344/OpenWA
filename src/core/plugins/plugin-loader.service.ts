@@ -136,7 +136,7 @@ export class PluginLoaderService implements OnModuleInit {
       if (!plugin.instance) {
         const mainPath = path.join(this.pluginsDir, pluginId, plugin.manifest.main);
         // Dynamic require for user plugins
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
+
         const pluginModule = require(mainPath) as { default?: new () => IPlugin };
         if (pluginModule.default) {
           plugin.instance = new pluginModule.default();
