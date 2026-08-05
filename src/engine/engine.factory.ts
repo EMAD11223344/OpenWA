@@ -10,8 +10,7 @@ export interface EngineCreateOptions {
   sessionId: string;
   /**
    * Optional per-session override for engine type. If unset, falls back to the
-   * global `engine.type` env / config setting. Allows one Space to host both
-   * whatsapp-web.js and baileys sessions side-by-side during migration.
+   * global `engine.type` env / config setting. Default engine is whatsapp-web.js.
    */
   engineType?: string;
   proxyUrl?: string;
@@ -27,7 +26,7 @@ export class EngineFactory implements OnModuleInit {
     private readonly configService: ConfigService,
     private readonly pluginLoader: PluginLoaderService,
   ) {
-    this.defaultEngineType = this.configService.get<string>('engine.type') ?? 'baileys';
+    this.defaultEngineType = this.configService.get<string>('engine.type') ?? 'whatsapp-web.js';
   }
 
   async onModuleInit(): Promise<void> {
@@ -49,29 +48,6 @@ export class EngineFactory implements OnModuleInit {
 
     const wwjsPlugin = new WhatsAppWebJsPlugin();
     this.pluginLoader.registerBuiltInPlugin(wwjsManifest, wwjsPlugin);
-
-    // Register Baileys as built-in plugin (no-op until `engineType=baileys`
-    // is selected via env or per-session override).
-    try {
-      const { BaileysPlugin } = require('../plugins/engines/baileys') as {
-        BaileysPlugin: { new (): unknown };
-      };
-      const baileysPlugin = new BaileysPlugin();
-      const baileysManifest: PluginManifest = {
-        id: 'baileys',
-        name: 'Baileys Engine',
-        version: '1.0.0',
-        type: PluginType.ENGINE,
-        description: 'Pure WebSocket WhatsApp engine (no Chromium)',
-        main: 'index.ts',
-        provides: ['whatsapp-engine', 'text-messages', 'media-messages', 'group-management', 'low-memory'],
-      };
-      this.pluginLoader.registerBuiltInPlugin(baileysManifest, baileysPlugin as never);
-    } catch (err) {
-      this.logger.warn(`Skipping baileys plugin registration (not yet available): ${String(err)}`, {
-        action: 'baileys_register_skipped',
-      });
-    }
 
     // Auto-enable the default engine
     try {
@@ -103,26 +79,6 @@ export class EngineFactory implements OnModuleInit {
       }) as IWhatsAppEngine;
     }
 
-    // Special-case: baileys wasn't registered (module missing). Fall back to
-    // the direct constructor path if executable.
-    if (engineType === 'baileys') {
-      try {
-        const { BaileysAdapter } = require('../engine/adapters/baileys.adapter') as {
-          BaileysAdapter: { new (cfg: unknown): IWhatsAppEngine };
-        };
-        const dataDir = (this.configService.get<string>('dataDatabase.database') ?? './data') + '/sessions';
-        return new BaileysAdapter({
-          sessionId: options.sessionId,
-          authDir: dataDir + '/' + options.sessionId,
-          proxyUrl: options.proxyUrl,
-          proxyType: options.proxyType,
-        });
-      } catch (err) {
-        this.logger.error(`BaileysPlugin.requested but BaileysAdapter not built: ${String(err)}`);
-        throw err;
-      }
-    }
-
     // Fallback to direct adapter creation (legacy support)
     this.logger.warn(`Engine plugin ${engineType} not available, using fallback`, {
       action: 'engine_fallback',
@@ -143,14 +99,16 @@ export class EngineFactory implements OnModuleInit {
   }
 
   private createFallbackEngine(options: EngineCreateOptions): IWhatsAppEngine {
-    // Baileys direct creation
-    const { BaileysAdapter } = require('./adapters/baileys.adapter');
     const sessionDataPath = this.configService.get<string>('engine.sessionDataPath') ?? './data/sessions';
-    return new BaileysAdapter({
+    return new WhatsAppWebJsAdapter({
       sessionId: options.sessionId,
-      authDir: `${sessionDataPath}/${options.sessionId}`,
-      proxyUrl: options.proxyUrl,
-      proxyType: options.proxyType,
+      sessionDataPath,
+      proxy: options.proxyUrl
+        ? {
+            url: options.proxyUrl,
+            type: options.proxyType ?? 'http',
+          }
+        : undefined,
     });
   }
 

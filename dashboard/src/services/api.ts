@@ -129,7 +129,7 @@ export interface SaveConfigPayload {
     s3Endpoint?: string;
   };
   engine?: {
-    type?: 'whatsapp-web.js' | 'baileys';
+    type?: 'whatsapp-web.js';
     headless?: boolean;
     sessionDataPath?: string;
     browserArgs?: string;

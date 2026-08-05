@@ -58,7 +58,7 @@ interface SaveConfigDto {
     s3Endpoint?: string;
   };
   engine?: {
-    type?: 'whatsapp-web.js' | 'baileys';
+    type?: 'whatsapp-web.js';
     headless?: boolean;
     sessionDataPath?: string;
     browserArgs?: string;
@@ -172,7 +172,7 @@ export class InfraController {
     const storageType = this.configService.get<'local' | 's3'>('storage.type', 'local');
     const storagePath = this.configService.get<string>('storage.path', './uploads');
 
-    const engineType = this.configService.get<string>('engine.type', 'baileys');
+    const engineType = this.configService.get<string>('engine.type', 'whatsapp-web.js');
     const engineHeadless = this.configService.get<boolean>('engine.headless', true);
     const sessionDataPath = this.configService.get<string>('engine.sessionDataPath', './data/sessions');
     const browserArgs = this.configService.get<string>('engine.browserArgs', '--no-sandbox --disable-gpu');
@@ -207,10 +207,10 @@ export class InfraController {
   @Post('engines/switch')
   @ApiOperation({ summary: 'Switch active engine at runtime' })
   @ApiResponse({ status: 200, description: 'Engine switched' })
-  @ApiBody({ schema: { properties: { engineType: { type: 'string', enum: ['whatsapp-web.js', 'baileys'] } } } })
+  @ApiBody({ schema: { properties: { engineType: { type: 'string', enum: ['whatsapp-web.js'] } } } })
   switchEngine(@Body() body: { engineType: string }): { success: boolean; engineType: string; message: string } {
     const { engineType } = body;
-    if (engineType !== 'whatsapp-web.js' && engineType !== 'baileys') {
+    if (engineType !== 'whatsapp-web.js') {
       return {
         success: false,
         engineType: this.engineFactory.getCurrentEngine(),

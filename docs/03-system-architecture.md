@@ -129,8 +129,7 @@ flowchart LR
     subgraph Implementations["Concrete Implementations"]
         subgraph Engine
             E1[whatsapp-web.js]
-            E2[Baileys]
-            E3[MockEngine]
+            E2[MockEngine]
         end
         subgraph Database
             D1[SQLite]
@@ -878,7 +877,7 @@ flowchart LR
 ## 3.12 Engine Abstraction Layer
 
 > [!IMPORTANT]
-> Engine abstraction is critical to mitigate **R001: WhatsApp Protocol Changes** in Risk Management. With an abstraction layer, we can easily switch to an alternative engine (e.g., Baileys) when needed.
+> Engine abstraction is critical to mitigate **R001: WhatsApp Protocol Changes** in Risk Management. With an abstraction layer, we can easily switch to an alternative engine when needed.
 
 ### Strategy Pattern for Engine
 
@@ -904,13 +903,6 @@ classDiagram
         +sendTextMessage(): Promise~MessageResult~
     }
     
-    class BaileysEngine {
-        -socket: WASocket
-        +initialize(): Promise~void~
-        +connect(): Promise~void~
-        +sendTextMessage(): Promise~MessageResult~
-    }
-    
     class MockEngine {
         +initialize(): Promise~void~
         +sendTextMessage(): Promise~MessageResult~
@@ -921,7 +913,6 @@ classDiagram
     }
     
     IWhatsAppEngine <|.. WhatsAppWebJSEngine
-    IWhatsAppEngine <|.. BaileysEngine
     IWhatsAppEngine <|.. MockEngine
     EngineFactory --> IWhatsAppEngine
 ```
@@ -995,10 +986,9 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { IWhatsAppEngine } from './interfaces/whatsapp-engine.interface';
 import { WhatsAppWebJSEngine } from './adapters/whatsapp-webjs.engine';
-import { BaileysEngine } from './adapters/baileys.engine';
 import { MockEngine } from './adapters/mock.engine';
 
-export type EngineType = 'whatsapp-web.js' | 'baileys' | 'mock';
+export type EngineType = 'whatsapp-web.js' | 'mock';
 
 @Injectable()
 export class EngineFactory {
@@ -1010,9 +1000,6 @@ export class EngineFactory {
     switch (engineType) {
       case 'whatsapp-web.js':
         return new WhatsAppWebJSEngine(this.config);
-      
-      case 'baileys':
-        return new BaileysEngine(this.config);
       
       case 'mock':
         return new MockEngine();
@@ -1096,88 +1083,11 @@ export class WhatsAppWebJSEngine implements IWhatsAppEngine {
 }
 ```
 
-### Baileys Adapter (Alternative Engine)
-
-```typescript
-// engine/adapters/baileys.engine.ts
-import makeWASocket, { 
-  DisconnectReason, 
-  useMultiFileAuthState 
-} from '@whiskeysockets/baileys';
-import { IWhatsAppEngine, EngineConfig, EngineStatus } from '../interfaces/whatsapp-engine.interface';
-
-export class BaileysEngine implements IWhatsAppEngine {
-  private socket: ReturnType<typeof makeWASocket> | null = null;
-  private status: EngineStatus = 'initializing';
-  private eventEmitter = new EventEmitter();
-  
-  async initialize(config: EngineConfig): Promise<void> {
-    const { state, saveCreds } = await useMultiFileAuthState(
-      config.authStatePath || `./.baileys_auth/${config.sessionId}`
-    );
-    
-    this.socket = makeWASocket({
-      auth: state,
-      printQRInTerminal: false,
-    });
-    
-    this.socket.ev.on('creds.update', saveCreds);
-    this.setupEventHandlers();
-  }
-  
-  private setupEventHandlers(): void {
-    this.socket!.ev.on('connection.update', (update) => {
-      const { connection, lastDisconnect, qr } = update;
-      
-      if (qr) {
-        this.status = 'qr_ready';
-        this.eventEmitter.emit('qr', qr);
-      }
-      
-      if (connection === 'open') {
-        this.status = 'ready';
-        this.eventEmitter.emit('ready');
-      }
-      
-      if (connection === 'close') {
-        this.status = 'disconnected';
-        const shouldReconnect = (lastDisconnect?.error as any)?.output?.statusCode !== DisconnectReason.loggedOut;
-        this.eventEmitter.emit('disconnected', { shouldReconnect });
-      }
-    });
-    
-    this.socket!.ev.on('messages.upsert', ({ messages }) => {
-      for (const msg of messages) {
-        if (!msg.key.fromMe) {
-          this.eventEmitter.emit('message', this.transformMessage(msg));
-        }
-      }
-    });
-  }
-  
-  async connect(): Promise<void> {
-    this.status = 'connecting';
-    // Baileys connects during initialize
-  }
-  
-  async sendTextMessage(chatId: string, text: string): Promise<MessageResult> {
-    const result = await this.socket!.sendMessage(chatId, { text });
-    return {
-      messageId: result!.key.id!,
-      timestamp: new Date(),
-      status: 'sent',
-    };
-  }
-  
-  // ... other method implementations
-}
-```
-
 ### Engine Selection Configuration
 
 ```yaml
 # .env
-ENGINE_TYPE=whatsapp-web.js  # Options: whatsapp-web.js, baileys, mock
+ENGINE_TYPE=whatsapp-web.js
 
 # For testing
 ENGINE_TYPE=mock
@@ -1197,7 +1107,6 @@ flowchart TB
     
     subgraph Migration["Migration Path"]
         C[Update whatsapp-web.js]
-        D[Switch to Baileys]
         E[Community Fork]
     end
     
@@ -1207,22 +1116,20 @@ flowchart TB
     
     A --> B
     B -->|Minor| C --> F
-    B -->|Major wwebjs| D --> F
-    B -->|Major Both| E --> F
+    B -->|Major wwebjs| E --> F
 ```
 
-### Engine Comparison
+### Engine Feature Summary
 
-| Feature | whatsapp-web.js | Baileys |
-|---------|-----------------|---------|
-| **Protocol** | Web (Puppeteer) | Native WebSocket |
-| **Resource Usage** | High (~500MB/session) | Low (~50MB/session) |
-| **Stability** | Good | Good |
-| **Community** | Large | Large |
-| **Multi-device** | ✅ | ✅ |
-| **QR Code** | ✅ | ✅ |
-| **Phone Link** | ❌ | ✅ |
-| **Maintenance** | Active | Active |
+| Feature | whatsapp-web.js |
+|---------|-----------------|
+| **Protocol** | Web (Puppeteer) |
+| **Stability** | Good |
+| **Community** | Large |
+| **Multi-device** | ✅ |
+| **QR Code** | ✅ |
+| **Phone Link** | ❌ |
+| **Maintenance** | Active |
 
 ### Benefits of Abstraction
 
@@ -1249,7 +1156,7 @@ flowchart TB
     subgraph Adapters["Pluggable Adapters"]
         subgraph Engine["WhatsApp Engine"]
             E1[whatsapp-web.js]
-            E2[Baileys]
+            E2[MockEngine]
             E3[Mock]
         end
 
@@ -1280,7 +1187,7 @@ flowchart TB
 
 | Component | Options | Default | Notes |
 |-----------|---------|---------|-------|
-| **WhatsApp Engine** | whatsapp-web.js, Baileys, Mock | whatsapp-web.js | Mock for testing |
+| **WhatsApp Engine** | whatsapp-web.js, Mock | whatsapp-web.js | Mock for testing |
 | **Database** | SQLite, PostgreSQL | SQLite | PostgreSQL for large-scale production |
 | **Media Storage** | Local, S3, MinIO | Local | S3/MinIO for horizontal scaling |
 | **Cache/Queue** | In-Memory, Redis | In-Memory | Redis for multi-instance |

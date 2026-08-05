@@ -51,7 +51,6 @@
     "@nestjs/throttler": "^6.5.0",
     "@nestjs/typeorm": "^11.0.0",
     "@nestjs/websockets": "^11.1.28",
-    "@whiskeysockets/baileys": "7.0.0-rc13",
     "https-proxy-agent": "^7.0.6",
     "socks-proxy-agent": "^8.0.5",
     "archiver": "^8.0.0",

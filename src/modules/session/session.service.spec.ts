@@ -68,7 +68,7 @@ describe('SessionService', () => {
 
     engineFactory = {
       create: jest.fn().mockReturnValue(mockEngine),
-      getCurrentEngine: jest.fn().mockReturnValue('baileys'),
+      getCurrentEngine: jest.fn().mockReturnValue('whatsapp-web.js'),
     };
 
     eventsGateway = {

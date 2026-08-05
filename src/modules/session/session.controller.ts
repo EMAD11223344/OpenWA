@@ -247,7 +247,7 @@ export class SessionController {
   async replyToMessage(@Param('id') id: string, @Body() body: { chatId: string; replyTo: string; text: string }) {
     const engine = this.sessionService.getEngine(id);
     if (!engine) throw new NotFoundException('Session engine not started');
-    // Baileys supports quoted messages via contextInfo
+    // Quoted messages via contextInfo
     const result = await engine.sendTextMessage(body.chatId, body.text);
     return result;
   }

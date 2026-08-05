@@ -224,12 +224,12 @@ export class SessionService implements OnModuleDestroy, OnModuleInit {
 
     // Memory-aware limits are enforced by the EngineWatchdog (which can also
     // cull the oldest non-ready session if RSS pressure approaches the cap).
-    // BAILEYS_MAX_SESSIONS (default 0 = unbounded) is the only hard knob; only
-    // honoured when explicitly set to a positive integer.
-    const maxConcurrent = parseInt(process.env.BAILEYS_MAX_SESSIONS ?? '0', 10);
+    // MAX_CONCURRENT_SESSIONS (default 0 = unbounded) is the only hard knob;
+    // only honoured when explicitly set to a positive integer.
+    const maxConcurrent = parseInt(process.env.MAX_CONCURRENT_SESSIONS ?? '0', 10);
     if (maxConcurrent > 0 && this.engines.size >= maxConcurrent) {
       throw new BadRequestException(
-        `BAILEYS_MAX_SESSIONS=${maxConcurrent} reached. Stop another session or raise the limit.`,
+        `MAX_CONCURRENT_SESSIONS=${maxConcurrent} reached. Stop another session or raise the limit.`,
       );
     }
 
@@ -392,10 +392,10 @@ export class SessionService implements OnModuleDestroy, OnModuleInit {
 
         // Detect persistent network/SSL failures that won't resolve by retrying.
         // Code 408 = request timeout; on HF data centers this can mean WhatsApp
-        // rejected the WebSocket TLS handshake (SSL alert 0). We give Baileys
-        // at least 3 reconnect attempts before declaring permanent failure —
-        // a single SSL rejection is too noisy and kills the session before
-        // Baileys' own retry logic has a chance to negotiate.
+        // rejected the WebSocket TLS handshake (SSL alert 0). We give the
+        // engine at least 3 reconnect attempts before declaring permanent
+        // failure — a single SSL rejection is too noisy and kills the session
+        // before the engine's own retry logic can negotiate.
         const isPermanentFailure = /code=408|SSL|EPROTO|ECONNREFUSED|ENOTFOUND/i.test(reason);
         if (isPermanentFailure) {
           const reconnectState = this.reconnectStates.get(id);
@@ -721,28 +721,24 @@ export class SessionService implements OnModuleDestroy, OnModuleInit {
 
   /**
    * Resolve media file path for a given session + messageId.
-   * Tries both Baileys (authDir/media/) and WWJS (sessionDataPath/media/) paths.
+   * Tries the whatsapp-web.js (sessionDataPath/media/) path.
    */
   async getMediaPath(sessionId: string, messageId: string): Promise<{ filePath: string; mimeType: string } | null> {
     const session = await this.sessionRepository.findOne({ where: { id: sessionId } });
     if (!session) return null;
 
-    const engineType = typeof session.config?.engine === 'string' ? session.config.engine : 'whatsapp-web.js';
     const dataBase =
       this.engineFactory['configService']?.get<string>('dataDatabase.database') ?? './data/openwa.sqlite';
     const dataDir = path.dirname(dataBase);
 
     // Try both engine paths
-    const candidates =
-      engineType === 'baileys'
-        ? [path.join(dataDir, 'sessions', session.name, 'media'), path.join(dataDir, 'sessions', sessionId, 'media')]
-        : [
-            path.join(dataDir, 'sessions', 'media'),
-            path.join(
-              this.engineFactory['configService']?.get<string>('engine.sessionDataPath') ?? './data/sessions',
-              'media',
-            ),
-          ];
+    const candidates = [
+      path.join(dataDir, 'sessions', 'media'),
+      path.join(
+        this.engineFactory['configService']?.get<string>('engine.sessionDataPath') ?? './data/sessions',
+        'media',
+      ),
+    ];
     for (const dir of candidates) {
       // Scan for any extension matching the messageId
       try {

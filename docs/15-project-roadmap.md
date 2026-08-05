@@ -34,8 +34,7 @@ timeline
                 : Grafana Dashboard
 
     section v1.0.0 - Enterprise
-        Q4 2026 : Baileys Engine
-                : Kubernetes Operator
+        Q4 2026 : Kubernetes Operator
 ```
 
 ### Release Summary
@@ -504,7 +503,6 @@ flowchart LR
 
 | Feature             | Priority | Description                    |
 | ------------------- | -------- | ------------------------------ |
-| Baileys Engine      | P2       | Alternative lightweight engine |
 | Kubernetes Operator | P3       | Native K8s deployment          |
 | Multi-tenant        | P3       | Enterprise SaaS features       |
 | Encryption at rest  | P2       | Full data encryption           |

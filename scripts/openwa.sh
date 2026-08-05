@@ -88,7 +88,7 @@ get_profiles() {
 # Validate engine type
 validate_engine() {
     local engine="${ENGINE_TYPE:-whatsapp-web.js}"
-    local valid_engines=("whatsapp-web.js" "baileys")
+    local valid_engines=("whatsapp-web.js")
 
     for valid in "${valid_engines[@]}"; do
         if [ "$engine" = "$valid" ]; then

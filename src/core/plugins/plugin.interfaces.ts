@@ -10,7 +10,7 @@ import { HookManager, HookEvent, HookHandler } from '../hooks';
 // ============================================================================
 
 export enum PluginType {
-  ENGINE = 'engine', // WhatsApp engine (whatsapp-web.js, baileys, etc.)
+  ENGINE = 'engine', // WhatsApp engine (whatsapp-web.js, etc.)
   STORAGE = 'storage', // Storage backends (local, S3, GCS, etc.)
   QUEUE = 'queue', // Queue systems (Redis, RabbitMQ, etc.)
   AUTH = 'auth', // Authentication providers

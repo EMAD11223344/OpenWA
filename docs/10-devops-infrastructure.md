@@ -459,7 +459,7 @@ CACHE_MAX=1000
 # WHATSAPP ENGINE
 # ===========================================
 ENGINE_TYPE=whatsapp-web.js
-# ENGINE_TYPE=baileys
+# ENGINE_TYPE=whatsapp-web.js
 # ENGINE_TYPE=mock
 
 # Session

@@ -65,7 +65,7 @@ export default function Plugins() {
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [configPlugin, setConfigPlugin] = useState<Plugin | null>(null);
   const [engineConfig, setEngineConfig] = useState<EngineConfig>({
-    type: infraStatus?.engine?.type || 'baileys',
+    type: infraStatus?.engine?.type || 'whatsapp-web.js',
     headless: infraStatus?.engine?.headless ?? true,
     sessionDataPath: '/data/sessions',
     browserArgs: '--no-sandbox --disable-gpu',
@@ -379,7 +379,7 @@ export default function Plugins() {
                   </div>
 
                   <div className="config-form">
-                    {/* Locked to Baileys — engine type selector removed */}
+                    {/* Locked to whatsapp-web.js — engine type selector removed */}
                     <div className="form-group">
                       <label>Engine</label>
                       <div style={{
@@ -389,13 +389,13 @@ export default function Plugins() {
                         color: 'var(--arena-text)', fontSize: '13px', fontWeight: 600,
                       }}>
                         <span style={{ fontSize: '16px' }}>⚡</span>
-                        Baileys (WebSocket, no Chromium)
+                        whatsapp-web.js (Chromium)
                         <span style={{ marginLeft: 'auto', fontSize: '10px', padding: '2px 8px', borderRadius: '20px', background: 'rgba(168,85,247,0.3)', color: '#c084fc', fontWeight: 700 }}>
                           ACTIVE
                         </span>
                       </div>
                       <small style={{ color: 'var(--text-muted)', fontSize: '11px', marginTop: '4px', display: 'block' }}>
-                        Pure WebSocket engine — no Chromium, no Puppeteer. Contacts, chats, and media sync via Baileys in-memory store.
+                        Puppeteer-based engine — runs the real WhatsApp Web client in headless Chromium. Full feature set: labels, channels, catalog, reactions, and group management.
                       </small>
                     </div>
 

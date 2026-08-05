@@ -16,7 +16,7 @@ An interface implementation that provides a specific capability. In OpenWA, adap
 - **Database Adapter**: SQLite, PostgreSQL
 - **Storage Adapter**: Local, S3
 - **Cache Adapter**: Memory, Redis
-- **Engine Adapter**: whatsapp-web.js, Baileys (future)
+- **Engine Adapter**: whatsapp-web.js
 
 ### API Key
 Authentication token to access the OpenWA API. Sent via the `X-API-Key` header.
@@ -25,9 +25,6 @@ Authentication token to access the OpenWA API. Sent via the `X-API-Key` header.
 WhatsApp Web session authentication data stored in the `.wwebjs_auth/` folder. Includes cookies, session storage, and Chrome profile data.
 
 ## B
-
-### Baileys
-An alternative Node.js library for WhatsApp Web that uses WebSocket directly without a browser. Lighter but easier to detect.
 
 ### Broadcast
 Sending the same message to multiple recipients. On WhatsApp, this differs from the native "Broadcast List" feature.

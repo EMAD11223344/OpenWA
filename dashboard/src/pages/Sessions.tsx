@@ -329,7 +329,6 @@ export function Sessions() {
               >
                 <option value="">Default (from Plugins settings)</option>
                 <option value="whatsapp-web.js">whatsapp-web.js (Chromium)</option>
-                <option value="baileys">Baileys (WebSocket)</option>
               </select>
               <p className="input-hint">
                 Choose the WhatsApp engine for this session. "Default" uses whichever engine is set as active in Plugins.

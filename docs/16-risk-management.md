@@ -52,7 +52,7 @@ flowchart TB
     
     M1 --> A1[Watch releases & issues]
     M2 --> A2[Engine interface pattern]
-    M3 --> A3[Baileys as backup]
+    M3 --> A3[Alternative engine as backup]
     M4 --> A4[< 24h patch capability]
 ```
 
@@ -431,7 +431,7 @@ flowchart TB
     M2 --> C1[Notify users]
     C1 --> C2[Switch to maintenance mode]
     C2 --> C3[Evaluate alternatives]
-    C3 --> |Baileys viable| C4[Implement Baileys engine]
+    C3 --> |Alternative viable| C4[Implement alternative engine]
     C3 --> |No alternatives| C5[Project pause/EOL]
 ```
 

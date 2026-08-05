@@ -155,7 +155,7 @@ export function Infrastructure() {
     max: 100,
   });
 
-  const [engineType, setEngineType] = useState<'whatsapp-web.js' | 'baileys'>('baileys');
+  const [engineType, setEngineType] = useState<'whatsapp-web.js'>('whatsapp-web.js');
 
   useEffect(() => {
     if (!infraStatus) return;
@@ -186,7 +186,7 @@ export function Infrastructure() {
     });
 
     if (infraStatus.engine?.type) {
-      setEngineType(infraStatus.engine.type as 'whatsapp-web.js' | 'baileys');
+      setEngineType('whatsapp-web.js');
     }
   }, [infraStatus]);
 
@@ -391,8 +391,8 @@ export function Infrastructure() {
               <Gauge size={20} />
               <h2>WhatsApp Engine</h2>
             </div>
-            <span className={`status-indicator ${engineType === 'baileys' ? 'connected' : 'sqlite'}`}>
-              ● {engineType === 'baileys' ? 'Baileys (WebSocket)' : 'WhatsApp Web.js (Chromium)'}
+            <span className={`status-indicator ${engineType === 'whatsapp-web.js' ? 'connected' : 'sqlite'}`}>
+              ● WhatsApp Web.js (Chromium)
             </span>
           </div>
 
@@ -400,13 +400,13 @@ export function Infrastructure() {
             <label className="radio-option selected" style={{ cursor: 'default' }}>
               <input type="radio" name="engineType" checked readOnly />
               <span style={{ fontSize: '2rem', opacity: 0.4, position: 'absolute', top: '12px', right: '12px' }}>⚡</span>
-              <span>Baileys (WebSocket, no Chromium)</span>
-              <small>Pure WebSocket — lightweight, low memory, fast reconnect. Contacts, chats and media sync via in-memory store.</small>
+              <span>WhatsApp Web.js (Chromium)</span>
+              <small>Puppeteer-based — full WhatsApp Web feature parity: labels, channels, catalog, groups, media, and status via the real WhatsApp Web client.</small>
             </label>
           </div>
 
           <div style={{ padding: '0.75rem 1rem', marginTop: '0.75rem', background: 'rgba(34,197,94,0.08)', borderRadius: '8px', border: '1px solid rgba(34,197,94,0.2)', fontSize: '0.8125rem', color: '#475569', lineHeight: 1.5 }}>
-            ⚡ Baileys connects directly via WebSocket — no browser needed. Faster, uses ~100MB less RAM. Full contact, chat, and media history sync on connect.
+            ⚡ whatsapp-web.js connects through the official WhatsApp Web client in headless Chromium. Complete feature set: labels, channels, catalog, reactions, and group management.
           </div>
         </section>
 

@@ -268,7 +268,7 @@ CREATE INDEX idx_sessions_created_at ON sessions(created_at);
 ```
 
 > [!NOTE]
-> `auth_state` is optional and engine-specific. By default, `whatsapp-web.js` stores auth state on the filesystem, while Baileys can store an encrypted blob in the database when enabled. This column can store the blob or an encrypted pointer/path.
+> `auth_state` is optional and engine-specific. By default, `whatsapp-web.js` stores auth state on the filesystem. This column can store an encrypted blob or an encrypted pointer/path.
 
 **Session Status Values:**
 
