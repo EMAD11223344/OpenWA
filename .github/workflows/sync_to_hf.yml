@@ -3,12 +3,13 @@ name: Sync to Hugging Face Hub
 on:
   push:
     branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   sync-to-hub:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -16,20 +17,4 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          # تهيئة أداة الملفات الكبيرة
-          git lfs install
-
-          # تنظيف شجرة العمل أولاً (تفادي خطأ "working copy must not be dirty"
-          # الذي يفشل أمر migrate)
-          git reset --hard HEAD
-          git clean -fd || true
-
-          # تحويل الملفات الثنائية في كل التاريخ إلى LFS كي يقبلها HF
-          # (يُرفَض الدفع إذا احتوى على ملفات ثنائية غير LFS).
-          git lfs migrate import --everything --yes --include="*.png,*.psd,*.webp,*.jpg,*.jpeg,*.gif,*.ico,*.woff,*.woff2,*.ttf,*.otf"
-
-          # بعد إعادة كتابة التاريخ نعيد ضبط شجرة العمل للتأكد من نظافتها قبل الدفع
-          git reset --hard HEAD
-
-          # الرفع القسوري بعد إصلاح التاريخ
           git push --force https://token:$HF_TOKEN@huggingface.co/spaces/myarenaosx/openwa main
