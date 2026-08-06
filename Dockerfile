@@ -1,6 +1,6 @@
 FROM python:3.11-slim
 
-# Install system dependencies & Go toolchain for CGO compilation
+# Install system dependencies, libmagic, & Go toolchain for CGO compilation
 RUN apt-get update && apt-get install -y \
     build-essential \
     curl \
@@ -8,6 +8,9 @@ RUN apt-get update && apt-get install -y \
     wget \
     sqlite3 \
     libsqlite3-dev \
+    libmagic1 \
+    libmagic-dev \
+    file \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Go 1.21
