@@ -4,7 +4,6 @@ import logging
 from typing import Dict, Optional, Any
 from neonize.client import NewClient
 from neonize.events import ConnectedEv, MessageEv, PairStatusEv, QREv
-from neonize.types import MessageServerID, JID
 
 logger = logging.getLogger("neonize-gateway")
 
@@ -81,8 +80,8 @@ class NeonizeSessionManager:
         def on_connected(client_inst: NewClient, evt: ConnectedEv):
             session.status = "CONNECTED"
             session.qr_code = None
-            if client_inst.me:
-                session.phone_number = client_inst.me.User
+            if hasattr(client_inst, "me") and client_inst.me:
+                session.phone_number = getattr(client_inst.me, "User", "")
                 session.push_name = getattr(client_inst.me, "PushName", None)
             logger.info(f"[{session.session_id}] Connected as {session.phone_number}")
             if self.sio:
@@ -98,15 +97,19 @@ class NeonizeSessionManager:
 
         @client.event(MessageEv)
         def on_message(client_inst: NewClient, message: MessageEv):
-            logger.info(f"[{session.session_id}] Received message from {message.Info.Sender}")
+            sender = getattr(message.Info, "Sender", "")
+            msg_id = getattr(message.Info, "ID", "")
+            timestamp = getattr(message.Info, "Timestamp", 0)
+            is_group = getattr(message.Info, "IsGroup", False)
+            logger.info(f"[{session.session_id}] Received message from {sender}")
             if self.sio:
                 asyncio.run_coroutine_threadsafe(
                     self.emit_event("message.received", {
                         "sessionId": session.session_id,
-                        "from": str(message.Info.Sender),
-                        "id": str(message.Info.ID),
-                        "timestamp": message.Info.Timestamp,
-                        "isGroup": message.Info.IsGroup,
+                        "from": str(sender),
+                        "id": str(msg_id),
+                        "timestamp": timestamp,
+                        "isGroup": is_group,
                         "message": str(message.Message)
                     }),
                     asyncio.get_event_loop()
