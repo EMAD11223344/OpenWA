@@ -1,39 +1,10 @@
-FROM python:3.11-slim
+FROM devlikeapro/waha:latest
 
-# Install system dependencies, libmagic, & Go toolchain for CGO compilation
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    curl \
-    git \
-    wget \
-    sqlite3 \
-    libsqlite3-dev \
-    libmagic1 \
-    libmagic-dev \
-    file \
-    tor \
-    torsocks \
-    && rm -rf /var/lib/apt/lists/*
+# Environment variables for WAHA
+ENV WHATSAPP_API_KEY=owa_k1_1a6cda48cdecfef7ba5c66a185103664d30f21d5bb3d02cf81a390ad2ac0e66e
+ENV WHATSAPP_DEFAULT_ENGINE=NOWEB
+ENV WAHA_WORKER_THREADS=2
+ENV WAHA_LOG_LEVEL=info
+ENV PORT=3000
 
-# Install Go 1.21
-RUN wget https://go.dev/dl/go1.21.6.linux-amd64.tar.gz && \
-    tar -C /usr/local -xzf go1.21.6.linux-amd64.tar.gz && \
-    rm go1.21.6.linux-amd64.tar.gz
-
-ENV PATH="/usr/local/go/bin:${PATH}"
-ENV CGO_ENABLED=1
-
-WORKDIR /app
-
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-COPY app/ ./app/
-COPY start.sh /start.sh
-RUN chmod +x /start.sh
-
-EXPOSE 8000
-
-ENV DATA_DIR="/app/data"
-
-CMD ["/start.sh"]
+EXPOSE 3000
