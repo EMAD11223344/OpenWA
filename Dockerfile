@@ -11,8 +11,6 @@ RUN apt-get update && apt-get install -y \
     libmagic1 \
     libmagic-dev \
     file \
-    tor \
-    netcat-openbsd \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Go 1.21

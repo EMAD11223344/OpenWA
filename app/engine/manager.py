@@ -81,20 +81,34 @@ class NeonizeSessionManager:
         if not client:
             return
 
-        @client.event(QREv)
-        def on_qr(client_inst: NewClient, qr: QREv):
+        def _handle_qr(qr_str: str):
+            if not qr_str:
+                return
             session.status = "CONNECTING"
-            session.qr_code = qr.code
-            logger.info(f"[{session.session_id}] New QR Code generated")
+            session.qr_code = qr_str
+            logger.info(f"[{session.session_id}] New QR Code generated ({len(qr_str)} chars)")
             if self.sio:
                 target_loop = self.loop or asyncio.get_event_loop()
                 asyncio.run_coroutine_threadsafe(
                     self.emit_event("session.qr", {
                         "sessionId": session.session_id,
-                        "qr": qr.code
+                        "qr": qr_str
                     }),
                     target_loop
                 )
+
+        try:
+            @client.qr
+            def on_qr_decorator(client_inst: NewClient, data: Any):
+                code = getattr(data, "code", None) or (data.decode() if isinstance(data, bytes) else str(data))
+                _handle_qr(code)
+        except Exception as e:
+            logger.debug(f"Could not bind @client.qr: {e}")
+
+        @client.event(QREv)
+        def on_qr_event(client_inst: NewClient, qr: QREv):
+            code = getattr(qr, "code", str(qr))
+            _handle_qr(code)
 
         @client.event(ConnectedEv)
         def on_connected(client_inst: NewClient, evt: ConnectedEv):
