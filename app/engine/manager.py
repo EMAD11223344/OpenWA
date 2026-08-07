@@ -17,6 +17,15 @@ class SessionInfo:
         self.phone_number: Optional[str] = None
         self.push_name: Optional[str] = None
 
+def _clean_db_files(db_path: str):
+    for suffix in ["", "-wal", "-shm", "-journal"]:
+        target = db_path + suffix if suffix else db_path
+        if os.path.exists(target):
+            try:
+                os.remove(target)
+            except Exception as e:
+                logger.warning(f"Could not remove SQLite file {target}: {e}")
+
 class NeonizeSessionManager:
     def __init__(self, data_dir: str = "./data", socket_sio: Any = None):
         self.data_dir = data_dir
@@ -52,6 +61,7 @@ class NeonizeSessionManager:
             return self.active_sessions[session_id]
 
         db_path = os.path.join(self.sessions_dir, f"{session_id}.sqlite3")
+        _clean_db_files(db_path)
         session = SessionInfo(session_id, db_path)
         
         try:
@@ -144,28 +154,11 @@ class NeonizeSessionManager:
                     except Exception as e:
                         err_msg = str(e)
                         logger.error(f"[{session_id}] Neonize connect error (attempt {attempt}): {err_msg}")
-                        if "whatsmeow_version already exists" in err_msg or "database" in err_msg:
-                            logger.warning(f"[{session_id}] DB conflict detected. Cleaning DB file and retrying...")
-                            if os.path.exists(session.db_path):
-                                try:
-                                    os.remove(session.db_path)
-                                except Exception as rm_err:
-                                    logger.error(f"Failed to remove DB {session.db_path}: {rm_err}")
-                            try:
-                                session.client = NewClient(session.db_path)
-                                self._register_client_events(session)
-                                session.client.connect()
-                                break
-                            except Exception as retry_err:
-                                logger.error(f"[{session_id}] Re-connect failed after DB reset: {retry_err}")
-                        elif "TLS handshake timeout" in err_msg or "dial" in err_msg or "timeout" in err_msg:
-                            if attempt < max_retries:
-                                logger.warning(f"[{session_id}] Network timeout on HuggingFace. Retrying in 2s (attempt {attempt + 1}/{max_retries})...")
-                                time.sleep(2)
-                            else:
-                                logger.error(f"[{session_id}] Max connection retries ({max_retries}) reached.")
+                        if attempt < max_retries:
+                            logger.warning(f"[{session_id}] Network timeout/error. Retrying in 3s (attempt {attempt + 1}/{max_retries})...")
+                            time.sleep(3)
                         else:
-                            break
+                            logger.error(f"[{session_id}] Max connection retries ({max_retries}) reached.")
 
             loop = asyncio.get_event_loop()
             self.loop = loop
@@ -189,9 +182,6 @@ class NeonizeSessionManager:
     def delete_session(self, session_id: str) -> bool:
         self.stop_session(session_id)
         session = self.active_sessions.pop(session_id, None)
-        if session and os.path.exists(session.db_path):
-            try:
-                os.remove(session.db_path)
-            except Exception as e:
-                logger.error(f"Error removing session DB {session.db_path}: {e}")
+        if session:
+            _clean_db_files(session.db_path)
         return True
