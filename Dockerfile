@@ -11,6 +11,8 @@ RUN apt-get update && apt-get install -y \
     libmagic1 \
     libmagic-dev \
     file \
+    tor \
+    netcat-openbsd \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Go 1.21
@@ -27,9 +29,11 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app/ ./app/
+COPY start.sh /start.sh
+RUN chmod +x /start.sh
 
 EXPOSE 8000
 
 ENV DATA_DIR="/app/data"
 
-CMD ["uvicorn", "app.main:asgi_app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["/start.sh"]
