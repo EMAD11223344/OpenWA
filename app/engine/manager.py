@@ -16,6 +16,7 @@ class SessionInfo:
         self.qr_code: Optional[str] = None
         self.phone_number: Optional[str] = None
         self.push_name: Optional[str] = None
+        self.is_connecting: bool = False
 
 def _clean_db_files(db_path: str):
     for suffix in ["", "-wal", "-shm", "-journal"]:
@@ -156,27 +157,36 @@ class NeonizeSessionManager:
         if not session:
             session = self.create_session(session_id)
 
+        if session.is_connecting or session.status == "CONNECTED":
+            logger.info(f"[{session_id}] Connect already in progress or connected. Skipping duplicate thread.")
+            return session
+
+        session.is_connecting = True
+
         if session.client:
             def _connect():
                 import time
-                max_retries = 5
-                for attempt in range(1, max_retries + 1):
-                    try:
-                        proxy = os.getenv("HTTP_PROXY") or os.getenv("HTTPS_PROXY")
-                        if proxy:
-                            logger.info(f"[{session_id}] Connecting to WhatsApp Web via Proxy ({proxy}) (attempt {attempt}/{max_retries})...")
-                        else:
-                            logger.info(f"[{session_id}] Connecting to WhatsApp Web (attempt {attempt}/{max_retries})...")
-                        session.client.connect()
-                        break
-                    except Exception as e:
-                        err_msg = str(e)
-                        logger.error(f"[{session_id}] Neonize connect error (attempt {attempt}): {err_msg}")
-                        if attempt < max_retries:
-                            logger.warning(f"[{session_id}] Network timeout/error. Retrying in 3s (attempt {attempt + 1}/{max_retries})...")
-                            time.sleep(3)
-                        else:
-                            logger.error(f"[{session_id}] Max connection retries ({max_retries}) reached.")
+                max_retries = 3
+                try:
+                    for attempt in range(1, max_retries + 1):
+                        try:
+                            proxy = os.getenv("HTTP_PROXY") or os.getenv("HTTPS_PROXY")
+                            if proxy:
+                                logger.info(f"[{session_id}] Connecting to WhatsApp Web via Proxy ({proxy}) (attempt {attempt}/{max_retries})...")
+                            else:
+                                logger.info(f"[{session_id}] Connecting to WhatsApp Web (attempt {attempt}/{max_retries})...")
+                            session.client.connect()
+                            break
+                        except Exception as e:
+                            err_msg = str(e)
+                            logger.error(f"[{session_id}] Neonize connect error (attempt {attempt}): {err_msg}")
+                            if attempt < max_retries:
+                                logger.warning(f"[{session_id}] Retrying in 2s (attempt {attempt + 1}/{max_retries})...")
+                                time.sleep(2)
+                            else:
+                                logger.error(f"[{session_id}] Max connection retries ({max_retries}) reached.")
+                finally:
+                    session.is_connecting = False
 
             loop = asyncio.get_event_loop()
             self.loop = loop
