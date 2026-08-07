@@ -66,12 +66,7 @@ class NeonizeSessionManager:
         session = SessionInfo(session_id, db_path)
         
         try:
-            proxy = os.getenv("PROXY_URL") or os.getenv("HTTPS_PROXY") or os.getenv("HTTP_PROXY")
-            if proxy:
-                logger.info(f"[{session_id}] Creating Neonize client with proxy: {proxy}")
-                client = NewClient(db_path, proxy=proxy)
-            else:
-                client = NewClient(db_path)
+            client = NewClient(db_path)
             session.client = client
             session.status = "CONNECTING"
             self._register_client_events(session)

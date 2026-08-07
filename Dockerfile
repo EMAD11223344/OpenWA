@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install -y \
     libmagic-dev \
     file \
     tor \
+    torsocks \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Go 1.21

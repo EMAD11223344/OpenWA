@@ -16,10 +16,10 @@ for i in $(seq 1 15); do
   sleep 1
 done
 
-# Set PROXY_URL for neonize's NewClient(proxy=...) parameter
-# This is read by manager.py create_session() and passed directly
-# to whatsmeow's SetProxyAddress() via neonize's built-in proxy support
-export PROXY_URL="socks5://127.0.0.1:9050"
-
-echo "Starting Uvicorn ASGI server (proxy=$PROXY_URL)..."
-exec uvicorn app.main:asgi_app --host 0.0.0.0 --port 8000
+# Use torsocks to transparently route ALL TCP connections through Tor SOCKS5.
+# This works at the LD_PRELOAD level, intercepting connect() syscalls from
+# both Python AND the Go CGO binary (neonize/whatsmeow), so even though
+# neonize doesn't expose proxy settings in Python, all WebSocket connections
+# to web.whatsapp.com will route through Tor's clean exit node IPs.
+echo "Starting Uvicorn ASGI server via torsocks (transparent SOCKS5 proxy)..."
+exec torsocks uvicorn app.main:asgi_app --host 0.0.0.0 --port 8000
