@@ -24,9 +24,18 @@ class NeonizeSessionManager:
         os.makedirs(self.sessions_dir, exist_ok=True)
         self.sio = socket_sio
         self.active_sessions: Dict[str, SessionInfo] = {}
+        self.loop: Optional[asyncio.AbstractEventLoop] = None
+        try:
+            self.loop = asyncio.get_running_loop()
+        except RuntimeError:
+            pass
 
     def set_sio(self, sio_instance: Any):
         self.sio = sio_instance
+        try:
+            self.loop = asyncio.get_running_loop()
+        except RuntimeError:
+            pass
 
     def get_session(self, session_id: str) -> Optional[SessionInfo]:
         return self.active_sessions.get(session_id)
@@ -68,12 +77,13 @@ class NeonizeSessionManager:
             session.qr_code = qr.code
             logger.info(f"[{session.session_id}] New QR Code generated")
             if self.sio:
+                target_loop = self.loop or asyncio.get_event_loop()
                 asyncio.run_coroutine_threadsafe(
                     self.emit_event("session.qr", {
                         "sessionId": session.session_id,
                         "qr": qr.code
                     }),
-                    asyncio.get_event_loop()
+                    target_loop
                 )
 
         @client.event(ConnectedEv)
@@ -85,6 +95,7 @@ class NeonizeSessionManager:
                 session.push_name = getattr(client_inst.me, "PushName", None)
             logger.info(f"[{session.session_id}] Connected as {session.phone_number}")
             if self.sio:
+                target_loop = self.loop or asyncio.get_event_loop()
                 asyncio.run_coroutine_threadsafe(
                     self.emit_event("session.status", {
                         "sessionId": session.session_id,
@@ -92,7 +103,7 @@ class NeonizeSessionManager:
                         "phoneNumber": session.phone_number,
                         "displayName": session.push_name
                     }),
-                    asyncio.get_event_loop()
+                    target_loop
                 )
 
         @client.event(MessageEv)
@@ -103,6 +114,7 @@ class NeonizeSessionManager:
             is_group = getattr(message.Info, "IsGroup", False)
             logger.info(f"[{session.session_id}] Received message from {sender}")
             if self.sio:
+                target_loop = self.loop or asyncio.get_event_loop()
                 asyncio.run_coroutine_threadsafe(
                     self.emit_event("message.received", {
                         "sessionId": session.session_id,
@@ -112,7 +124,7 @@ class NeonizeSessionManager:
                         "isGroup": is_group,
                         "message": str(message.Message)
                     }),
-                    asyncio.get_event_loop()
+                    target_loop
                 )
 
     def start_session(self, session_id: str):
@@ -122,9 +134,27 @@ class NeonizeSessionManager:
 
         if session.client:
             def _connect():
-                session.client.connect()
+                try:
+                    session.client.connect()
+                except Exception as e:
+                    err_msg = str(e)
+                    logger.error(f"[{session_id}] Neonize connect error: {err_msg}")
+                    if "whatsmeow_version already exists" in err_msg or "database" in err_msg:
+                        logger.warning(f"[{session_id}] DB conflict detected. Cleaning DB file and retrying...")
+                        if os.path.exists(session.db_path):
+                            try:
+                                os.remove(session.db_path)
+                            except Exception as rm_err:
+                                logger.error(f"Failed to remove DB {session.db_path}: {rm_err}")
+                        try:
+                            session.client = NewClient(session.db_path)
+                            self._register_client_events(session)
+                            session.client.connect()
+                        except Exception as retry_err:
+                            logger.error(f"[{session_id}] Re-connect failed after DB reset: {retry_err}")
 
             loop = asyncio.get_event_loop()
+            self.loop = loop
             loop.run_in_executor(None, _connect)
         return session
 
