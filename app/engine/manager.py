@@ -134,24 +134,38 @@ class NeonizeSessionManager:
 
         if session.client:
             def _connect():
-                try:
-                    session.client.connect()
-                except Exception as e:
-                    err_msg = str(e)
-                    logger.error(f"[{session_id}] Neonize connect error: {err_msg}")
-                    if "whatsmeow_version already exists" in err_msg or "database" in err_msg:
-                        logger.warning(f"[{session_id}] DB conflict detected. Cleaning DB file and retrying...")
-                        if os.path.exists(session.db_path):
+                import time
+                max_retries = 5
+                for attempt in range(1, max_retries + 1):
+                    try:
+                        logger.info(f"[{session_id}] Connecting to WhatsApp Web (attempt {attempt}/{max_retries})...")
+                        session.client.connect()
+                        break
+                    except Exception as e:
+                        err_msg = str(e)
+                        logger.error(f"[{session_id}] Neonize connect error (attempt {attempt}): {err_msg}")
+                        if "whatsmeow_version already exists" in err_msg or "database" in err_msg:
+                            logger.warning(f"[{session_id}] DB conflict detected. Cleaning DB file and retrying...")
+                            if os.path.exists(session.db_path):
+                                try:
+                                    os.remove(session.db_path)
+                                except Exception as rm_err:
+                                    logger.error(f"Failed to remove DB {session.db_path}: {rm_err}")
                             try:
-                                os.remove(session.db_path)
-                            except Exception as rm_err:
-                                logger.error(f"Failed to remove DB {session.db_path}: {rm_err}")
-                        try:
-                            session.client = NewClient(session.db_path)
-                            self._register_client_events(session)
-                            session.client.connect()
-                        except Exception as retry_err:
-                            logger.error(f"[{session_id}] Re-connect failed after DB reset: {retry_err}")
+                                session.client = NewClient(session.db_path)
+                                self._register_client_events(session)
+                                session.client.connect()
+                                break
+                            except Exception as retry_err:
+                                logger.error(f"[{session_id}] Re-connect failed after DB reset: {retry_err}")
+                        elif "TLS handshake timeout" in err_msg or "dial" in err_msg or "timeout" in err_msg:
+                            if attempt < max_retries:
+                                logger.warning(f"[{session_id}] Network timeout on HuggingFace. Retrying in 2s (attempt {attempt + 1}/{max_retries})...")
+                                time.sleep(2)
+                            else:
+                                logger.error(f"[{session_id}] Max connection retries ({max_retries}) reached.")
+                        else:
+                            break
 
             loop = asyncio.get_event_loop()
             self.loop = loop
