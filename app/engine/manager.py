@@ -148,13 +148,12 @@ class NeonizeSessionManager:
                 max_retries = 5
                 for attempt in range(1, max_retries + 1):
                     try:
-                        logger.info(f"[{session_id}] Connecting to WhatsApp Web (attempt {attempt}/{max_retries})...")
-                        proxy = os.getenv("HTTP_PROXY") or os.getenv("HTTPS_PROXY") or os.getenv("PROXY_URL")
-                        if proxy and hasattr(session.client, "connect_with_proxy"):
-                            logger.info(f"[{session_id}] Routing via Proxy: {proxy}")
-                            session.client.connect_with_proxy(proxy)
+                        proxy = os.getenv("HTTP_PROXY") or os.getenv("HTTPS_PROXY")
+                        if proxy:
+                            logger.info(f"[{session_id}] Connecting to WhatsApp Web via Proxy ({proxy}) (attempt {attempt}/{max_retries})...")
                         else:
-                            session.client.connect()
+                            logger.info(f"[{session_id}] Connecting to WhatsApp Web (attempt {attempt}/{max_retries})...")
+                        session.client.connect()
                         break
                     except Exception as e:
                         err_msg = str(e)

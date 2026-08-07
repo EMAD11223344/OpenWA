@@ -17,8 +17,10 @@ done
 # Export proxy environment variables for Python & Go/whatsmeow
 export HTTP_PROXY="socks5://127.0.0.1:9050"
 export HTTPS_PROXY="socks5://127.0.0.1:9050"
+export ALL_PROXY="socks5://127.0.0.1:9050"
 export http_proxy="socks5://127.0.0.1:9050"
 export https_proxy="socks5://127.0.0.1:9050"
+export all_proxy="socks5://127.0.0.1:9050"
 
 echo "Starting Uvicorn ASGI server with Tor SOCKS5 Proxy..."
 exec uvicorn app.main:asgi_app --host 0.0.0.0 --port 8000
