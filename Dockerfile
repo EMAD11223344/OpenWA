@@ -1,10 +1,11 @@
 FROM devlikeapro/waha:latest
 
-# Environment variables for WAHA
+# Environment variables for WAHA on Hugging Face Spaces (Port 7860 required)
 ENV WHATSAPP_API_KEY=owa_k1_1a6cda48cdecfef7ba5c66a185103664d30f21d5bb3d02cf81a390ad2ac0e66e
 ENV WHATSAPP_DEFAULT_ENGINE=NOWEB
 ENV WAHA_WORKER_THREADS=2
 ENV WAHA_LOG_LEVEL=info
-ENV PORT=3000
+ENV PORT=7860
+ENV WAHA_PORT=7860
 
-EXPOSE 3000
+EXPOSE 7860
