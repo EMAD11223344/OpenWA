@@ -1,0 +1,30 @@
+﻿name: Sync to Hugging Face Hub
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  sync-to-hub:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Git LFS and convert binary files
+        run: |
+          git lfs install
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git reset --hard HEAD
+          git clean -fd
+          git lfs migrate import --everything --yes --include="*.png,*.psd,*.webp,*.jpg,*.jpeg,*.gif,*.ico,*.woff,*.woff2,*.ttf,*.otf" || true
+          git reset --hard HEAD
+
+      - name: Push to HF
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          git push --force https://token:$HF_TOKEN@huggingface.co/spaces/myarenaosx/openwa main
