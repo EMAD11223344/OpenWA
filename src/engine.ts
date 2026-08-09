@@ -9,9 +9,11 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import https from 'https';
 import makeWASocket, {
   WASocket,
   DisconnectReason,
+  Browsers,
   useMultiFileAuthState,
   fetchLatestBaileysVersion,
 } from '@whiskeysockets/baileys';
@@ -144,15 +146,19 @@ export class Engine {
       // keep lib-default version pinned by the installed package
     }
 
+    const customAgent = new https.Agent({
+      keepAlive: true,
+      family: 4,
+    });
+
     const sock = makeWASocket({
       version,
+      browser: Browsers.ubuntu('Chrome'),
+      agent: customAgent,
+      fetchAgent: customAgent as any,
       auth: { creds: state.creds, keys: state.keys },
       syncFullHistory: false,
       markOnlineOnConnect: false,
-      // Cloud runtimes (HF Spaces, containers) can be slow to reach
-      // WhatsApp's gateways; default 20-30s timeouts abort before the QR
-      // challenge arrives. Generous timeouts + more retries keep the pairing
-      // window open long enough for a QR to appear.
       connectTimeoutMs: 60_000,
       retryRequestDelayMs: 2_000,
     });
@@ -201,10 +207,6 @@ export class Engine {
       this.mapState(accountId, status, update.lastDisconnect?.error);
     });
 
-    // Pairing watchdog: if no QR arrived within 150s (cloud runtime IPs are
-    // often rate-limited/blocked by WhatsApp — TLS handshakes abort with
-    // SSL alert 0), report FAILED so the Brain records the real network error
-    // and the pairing UI stops the infinite spinner instead of hanging.
     this.qrWatchdogs.set(
       accountId,
       setTimeout(() => {
@@ -269,8 +271,8 @@ export class Engine {
     }
   }
 
-/** Command: disconnect the transport but keep auth snapshot (plan §6.3). */
-async disconnectSession(accountId: string): Promise<void> {
+  /** Command: disconnect the transport but keep auth snapshot (plan §6.3). */
+  async disconnectSession(accountId: string): Promise<void> {
     const h = this.sessions.get(accountId);
     this.clearWatchdog(accountId);
     this.lastConnError.delete(accountId);

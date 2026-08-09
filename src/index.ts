@@ -4,7 +4,12 @@
  * ENGINE_AUTH_STATE_KEY_V1, HF_BUCKET_*, ENGINE_MAX_ACTIVE_SESSIONS.
  */
 import path from 'path';
+import dns from 'dns';
 import { createServer, Server } from 'http';
+
+try {
+  dns.setDefaultResultOrder('ipv4first');
+} catch {}
 import { CommandEnvelope } from './envelope';
 import { ControlClient } from './control-client';
 import { Engine } from './engine';
