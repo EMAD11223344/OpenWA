@@ -106,7 +106,21 @@ export class ControlClient {
       try {
         const env: ControlEnvelope = JSON.parse(String(raw));
         if (env.kind === 'command') {
-          void this.opts.onCommand(env as CommandEnvelope);
+          const cmd = env as CommandEnvelope;
+          const commandId = String((cmd.payload as Record<string, unknown> | undefined)?.commandId ?? '');
+          // Ack every accepted command so the Brain can release its concurrency
+          // credit (inFlight pool) — without an ack, statements stay DISPATCHED
+          // forever and the engine stops receiving new commands once the pool
+          // fills up (plan §6.3 credit ledger).
+          Promise.resolve()
+            .then(() => this.opts.onCommand(cmd))
+            .then(() => {
+              if (commandId) this.ack(commandId, 'accepted');
+            })
+            .catch((err: unknown) => {
+              this.log.warn({ err: String(err), commandId, type: cmd.type }, 'command failed');
+              if (commandId) this.ack(commandId, 'rejected');
+            });
         }
       } catch (e) {
         this.log.warn({ err: String(e), msg: 'invalid control frame' });
@@ -136,6 +150,23 @@ export class ControlClient {
       sequence: ++this.sequence,
       createdAt: new Date().toISOString(),
       payload,
+    };
+    ws.send(JSON.stringify(env));
+    return true;
+  }
+
+  /** Ack a command so the Brain releases its concurrency credit (plan §6.3). */
+  private ack(commandId: string, status: 'accepted' | 'rejected'): boolean {
+    const ws = this.ws;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return false;
+    const env: ControlEnvelope = {
+      id: randomUUID(),
+      kind: 'ack',
+      type: 'command.ack',
+      engineId: this.opts.engineId,
+      sequence: ++this.sequence,
+      createdAt: new Date().toISOString(),
+      payload: { commandId, status },
     };
     ws.send(JSON.stringify(env));
     return true;
