@@ -147,6 +147,12 @@ export class Engine {
       auth: { creds: state.creds, keys: state.keys },
       syncFullHistory: false,
       markOnlineOnConnect: false,
+      // Cloud runtimes (HF Spaces, containers) can be slow to reach
+      // WhatsApp's gateways; default 20-30s timeouts abort before the QR
+      // challenge arrives. Generous timeouts + more retries keep the pairing
+      // window open long enough for a QR to appear.
+      connectTimeoutMs: 60_000,
+      retryRequestDelayMs: 2_000,
     });
 
     const handle: SessionHandle = { accountId, epoch, disconnected: false, dir, socket: sock };
@@ -175,6 +181,14 @@ export class Engine {
       }
       const status = update.connection;
       if (!status) return;
+      if (status === 'close') {
+        const reason = (update.lastDisconnect?.error as any)?.output?.status;
+        const errMsg = String(update.lastDisconnect?.error?.message ?? '');
+        log.warn(
+          { accountId, status, reason, err: errMsg.slice(0, 200) },
+          'whatsapp connection closed — retrying (pairing QR will appear once the handshake completes)',
+        );
+      }
       this.mapState(accountId, status, update.lastDisconnect?.error);
     });
 
