@@ -27,11 +27,37 @@ function makeAuthToken(secret: string, engineId: string): string {
   return `${ts}.${exp}.${engineId}.${mac}`;
 }
 
+/** A dial-able control URL must be an absolute http(s)/ws(s) URL with a host. */
+function isHttpWsUrl(url: string): boolean {
+  try {
+    if (!url) return false;
+    const u = new URL(url);
+    return (u.protocol === 'wss:' || u.protocol === 'ws:') && !!u.host;
+  } catch {
+    return false;
+  }
+}
+
+/** Log a URL without leaking credentials or query secrets. */
+function redactUrl(url: string): string {
+  if (!url) return '(empty)';
+  try {
+    const u = new URL(url);
+    u.search = '';
+    u.hash = '';
+    if (u.password) u.username = u.username ? `${u.username}:***` : '***';
+    return u.toString();
+  } catch {
+    return '(invalid)';
+  }
+}
+
 export class ControlClient {
   private ws: WebSocket | null = null;
   private sequence = 0;
   private heartbeatTimer?: NodeJS.Timeout;
   private reconnectTimer?: NodeJS.Timeout;
+  private retryConfigTimer?: NodeJS.Timeout;
   private backoffMs = 1000;
   private closedByUs = false;
   private readonly log: Logger;
@@ -42,15 +68,30 @@ export class ControlClient {
 
   connect(): void {
     this.closedByUs = false;
+    // Missing/inexpressive BRAIN control URL is a config-not-ready state, not a
+    // crash: idle (health server stays up) and re-probe in case it appears later.
+    if (!isHttpWsUrl(this.opts.brainControlUrl)) {
+      this.log.warn({ url: redactUrl(this.opts.brainControlUrl) }, 'control URL invalid — idle until configured, re-probing every 30s');
+      clearTimeout(this.retryConfigTimer);
+      this.retryConfigTimer = setTimeout(() => this.connect(), 30_000);
+      return;
+    }
     this.open();
   }
 
   private open(): void {
-    const token = makeAuthToken(this.opts.secret, this.opts.engineId);
-    const ws = new WebSocket(this.opts.brainControlUrl, {
-      headers: { authorization: `Bearer ${token}` },
-      handshakeTimeout: 10_000,
-    });
+    let ws: WebSocket;
+    try {
+      ws = new WebSocket(this.opts.brainControlUrl, {
+        headers: { authorization: `Bearer ${makeAuthToken(this.opts.secret, this.opts.engineId)}` },
+        handshakeTimeout: 10_000,
+      });
+    } catch (err) {
+      // e.g. malformed URL — treat as retryable, never crash the container.
+      this.log.warn({ err: String(err) }, 'control socket open failed — scheduling reconnect');
+      this.scheduleReconnect();
+      return;
+    }
     this.ws = ws;
 
     ws.on('open', () => {
@@ -127,6 +168,7 @@ export class ControlClient {
 
   close(): void {
     this.closedByUs = true;
+    clearTimeout(this.retryConfigTimer);
     this.stopTimers();
     try {
       this.ws?.close();
