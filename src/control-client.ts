@@ -27,6 +27,26 @@ function makeAuthToken(secret: string, engineId: string): string {
   return `${ts}.${exp}.${engineId}.${mac}`;
 }
 
+export function normalizeControlUrl(rawUrl: string): string {
+  if (!rawUrl) return '';
+  try {
+    let s = rawUrl.trim();
+    if (s.startsWith('http://')) s = s.replace('http://', 'ws://');
+    else if (s.startsWith('https://')) s = s.replace('https://', 'wss://');
+    else if (!s.startsWith('ws://') && !s.startsWith('wss://')) s = `wss://${s}`;
+
+    const u = new URL(s);
+    if (!u.pathname || u.pathname === '/') {
+      u.pathname = '/internal/whatsapp-engine/control';
+    } else if (u.pathname === '/whatsapp-engine/control') {
+      u.pathname = '/internal/whatsapp-engine/control';
+    }
+    return u.toString();
+  } catch {
+    return rawUrl;
+  }
+}
+
 /** A dial-able control URL must be an absolute http(s)/ws(s) URL with a host. */
 function isHttpWsUrl(url: string): boolean {
   try {
@@ -68,6 +88,7 @@ export class ControlClient {
 
   connect(): void {
     this.closedByUs = false;
+    this.opts.brainControlUrl = normalizeControlUrl(this.opts.brainControlUrl);
     // Missing/inexpressive BRAIN control URL is a config-not-ready state, not a
     // crash: idle (health server stays up) and re-probe in case it appears later.
     if (!isHttpWsUrl(this.opts.brainControlUrl)) {
