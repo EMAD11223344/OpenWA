@@ -1,0 +1,7 @@
+node_modules
+dist
+tests
+protocol-trace.mock.log
+*.log
+.env
+.git

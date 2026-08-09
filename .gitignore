@@ -1,0 +1,8 @@
+node_modules
+dist
+.local-auth-dev
+*.log
+.env
+.env.*
+!.env.example
+protocol-trace.*
