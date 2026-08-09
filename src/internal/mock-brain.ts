@@ -83,6 +83,25 @@ wss.on('connection', (ws, req) => {
     }, 500);
   };
 
+  // platform runtime capacity control (plan §4.2): brain pushes SET_CAPACITY,
+  // engine updates its cap without restart and re-advertises via engine.health
+  const scheduleCapacity = (value: number) => {
+    setTimeout(() => {
+      if (ws.readyState !== ws.OPEN) return;
+      const cap: ControlEnvelope = {
+        id: 'mock-capacity-1',
+        kind: 'command',
+        type: 'SET_CAPACITY',
+        engineId,
+        sequence: 11,
+        createdAt: new Date().toISOString(),
+        payload: { maxSessions: value },
+      };
+      ws.send(JSON.stringify(cap));
+      logTrace(`sent command SET_CAPACITY maxSessions=${value}`);
+    }, 2500);
+  };
+
   // Wait for engine.hello before autonomous commands
   ws.on('message', (raw) => {
     try {
@@ -90,6 +109,7 @@ wss.on('connection', (ws, req) => {
       logTrace(`event kind=${env.kind} type=${env.type} seq=${env.sequence} ${JSON.stringify(env.payload ?? {})}`);
       if (env.type === 'engine.hello') {
         scheduleStart();
+        scheduleCapacity(Number(process.env.MOCK_CAPACITY || 40));
       }
       if (env.type === 'pairing.qr') {
         logTrace(`QR received for ${String(env.payload?.accountId)} — length ${String(env.payload?.qr).length}`);

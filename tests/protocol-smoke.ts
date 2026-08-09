@@ -89,6 +89,12 @@ async function main(): Promise<void> {
   check('command START_SESSION dispatched', trace.includes('sent command START_SESSION'));
   check('qr event relayed', trace.includes('pairing.qr'), 'QR event surfaced on control wire');
   check(
+    'capacity runtime update',
+    trace.includes('sent command SET_CAPACITY maxSessions=40') &&
+      trace.includes('"capacity":40'),
+    'SET_CAPACITY dispatched and engine re-advertised capacity=40 via engine.health',
+  );
+  check(
     'secret-never-logged',
     !/Bearer [A-Za-z0-9._]+/.test(trace) && !/mock-secret/.test(trace.replace(/secret="mock-secret"/, '')),
     'raw secret must not appear in trace',

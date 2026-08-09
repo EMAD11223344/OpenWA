@@ -79,6 +79,25 @@ export class Engine {
   }
 
   /**
+   * SET_CAPACITY handler (platform runtime control, plan §4.2): change the
+   * active-session cap without restarting the container. The Brain persists
+   * the value and the engine re-advertises it via engine.health.
+   * Raising is always allowed; lowering warns but kills no live session.
+   */
+  async setCapacity(value: number): Promise<void> {
+    const n = Math.max(1, Math.floor(Number(value) || 1));
+    this.cfg.maxActiveSessions = n;
+    this.cfg.log.info(`capacity updated at runtime — maxActiveSessions=${n}`);
+    this.emit('engine.health', { active: this.activeCount, capacity: n, state: 'OK' });
+    if (this.sessions.size > n) {
+      this.cfg.log.warn(
+        { active: this.sessions.size, capacity: n },
+        'capacity lowered below active sessions — excess sessions remain until end/disconnect',
+      );
+    }
+  }
+
+  /**
    * START_SESSION handler. `epoch` comes from the Brain lease; stale epochs
    * (crash-resumed old engine) are rejected by the Brain BEFORE dispatch — we
    * additionally stamp the epoch into the temp dir + snapshot key so a restored

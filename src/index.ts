@@ -90,6 +90,8 @@ export function buildEngine(cfg: RuntimeConfig): {
       case 'HEALTH_CHECK':
         control.emit('engine.health', { active: eng.activeCount, capacity: eng.capacity, state: 'OK' });
         return Promise.resolve();
+      case 'SET_CAPACITY':
+        return eng.setCapacity(payload.maxSessions ?? payload.capacity);
       default:
         control.emit('command.error', { op: cmd.type, reason: 'unknown_command' });
         return Promise.resolve();
@@ -106,7 +108,7 @@ export function buildEngine(cfg: RuntimeConfig): {
         engineId: cfg.engineId,
         version: '0.1.0',
         capacity: cfg.maxActiveSessions,
-        abilities: ['start_session', 'disconnect', 'revoke', 'send_message'],
+        abilities: ['start_session', 'disconnect', 'revoke', 'send_message', 'set_capacity'],
         stateKeyFingerprint: cfg.authStateKey.slice(0, 6).toString('hex'),
       });
     },
