@@ -1,3 +1,13 @@
+---
+title: OpenWA Engine
+emoji: 💬
+colorFrom: blue
+colorTo: green
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # OpenWA Engine
 
 Central WhatsApp messaging engine for the Business-OS platform.

@@ -4,6 +4,7 @@
  * ENGINE_AUTH_STATE_KEY_V1, HF_BUCKET_*, ENGINE_MAX_ACTIVE_SESSIONS.
  */
 import path from 'path';
+import { createServer, Server } from 'http';
 import { CommandEnvelope } from './envelope';
 import { ControlClient } from './control-client';
 import { Engine } from './engine';
@@ -133,8 +134,25 @@ export async function main(env: NodeJS.ProcessEnv = process.env): Promise<void> 
   const runtime = buildEngine(cfg);
   runtime.start();
 
+  const port = parseInt(env.PORT || env.APP_PORT || '7860', 10);
+  let healthServer: Server | null = null;
+  try {
+    healthServer = createServer((_req, res) => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ status: 'OK', engineId: cfg.engineId }));
+    });
+    healthServer.listen(port, () => {
+      console.log(`[engine] HTTP health server listening on port ${port}`);
+    });
+  } catch (err) {
+    console.warn('[engine] Failed to start HTTP health server:', err);
+  }
+
   const graceful = async (signal: string) => {
     console.log(`[engine] ${signal} — shutting down`);
+    if (healthServer) {
+      healthServer.close();
+    }
     await runtime.stop();
     process.exit(0);
   };
