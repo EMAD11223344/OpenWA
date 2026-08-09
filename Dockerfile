@@ -3,10 +3,10 @@ FROM node:22-alpine AS base
 WORKDIR /app
 
 COPY package.json package-lock.json* ./
-RUN npm ci --omit=dev --no-audit --no-fund
+RUN HTTP_PROXY= HTTPS_PROXY= http_proxy= https_proxy= npm ci --omit=dev --no-audit --no-fund
 
 FROM base AS build
-RUN npm ci --no-audit --no-fund
+RUN HTTP_PROXY= HTTPS_PROXY= http_proxy= https_proxy= npm ci --no-audit --no-fund
 COPY tsconfig.json ./
 COPY src/ ./src/
 RUN npm run build

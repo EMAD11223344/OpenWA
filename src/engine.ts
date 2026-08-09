@@ -69,7 +69,7 @@ function restoreDirFromSnapshot(dir: string, blobText: string): void {
 const gracefulEnd = () => new Error('graceful engine disconnect');
 
 function resolveProxyAgent(log: Logger): any {
-  const proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY || process.env.SOCKS_PROXY || '';
+  const proxyUrl = process.env.WA_PROXY_URL || process.env.HTTPS_PROXY || process.env.HTTP_PROXY || process.env.SOCKS_PROXY || '';
   if (proxyUrl) {
     try {
       const u = new URL(proxyUrl);
