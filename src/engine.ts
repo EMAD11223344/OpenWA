@@ -68,6 +68,32 @@ function restoreDirFromSnapshot(dir: string, blobText: string): void {
 
 const gracefulEnd = () => new Error('graceful engine disconnect');
 
+function resolveProxyAgent(log: Logger): any {
+  const proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY || process.env.SOCKS_PROXY || '';
+  if (proxyUrl) {
+    try {
+      const u = new URL(proxyUrl);
+      if (['http:', 'https:'].includes(u.protocol)) {
+        log.info(`using outbound HTTPS proxy "${u.hostname}:${u.port}" for Baileys WebSocket`);
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { HttpsProxyAgent } = require('https-proxy-agent');
+        return new HttpsProxyAgent(proxyUrl);
+      } else {
+        log.warn({ proxyUrl: proxyUrl.slice(0, 15) }, `HTTPS_PROXY protocol "${u.protocol}" invalid — expected http:// or https://`);
+      }
+    } catch {
+      log.warn(
+        { invalidValue: proxyUrl.slice(0, 20) },
+        'HTTPS_PROXY secret is set but is not a valid URL (expected e.g. http://user:pass@proxy-host:8080). Falling back to direct socket connection.',
+      );
+    }
+  }
+  return new https.Agent({
+    keepAlive: true,
+    family: 4,
+  });
+}
+
 export class Engine {
   private sessions = new Map<string, SessionHandle>();
   private qrWatchdogs = new Map<string, NodeJS.Timeout>();
@@ -146,10 +172,7 @@ export class Engine {
       // keep lib-default version pinned by the installed package
     }
 
-    const customAgent = new https.Agent({
-      keepAlive: true,
-      family: 4,
-    });
+    const customAgent = resolveProxyAgent(log);
 
     const sock = makeWASocket({
       version,
