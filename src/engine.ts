@@ -173,9 +173,14 @@ export class Engine {
     }
 
     const customAgent = resolveProxyAgent(log);
+    const waWebSocketUrl = process.env.WA_WEBSOCKET_URL || process.env.WA_RELAY_URL || undefined;
+    if (waWebSocketUrl) {
+      log.info(`using custom WhatsApp WebSocket relay: ${waWebSocketUrl}`);
+    }
 
     const sock = makeWASocket({
       version,
+      waWebSocketUrl,
       browser: Browsers.ubuntu('Chrome'),
       agent: customAgent,
       fetchAgent: customAgent as any,
