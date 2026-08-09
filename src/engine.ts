@@ -68,6 +68,8 @@ const gracefulEnd = () => new Error('graceful engine disconnect');
 
 export class Engine {
   private sessions = new Map<string, SessionHandle>();
+  private qrWatchdogs = new Map<string, NodeJS.Timeout>();
+  private lastConnError = new Map<string, string>();
 
   constructor(private cfg: EngineConfig) {}
 
@@ -177,6 +179,7 @@ export class Engine {
     sock.ev.on('connection.update', (update) => {
       if (update.qr) {
         // QR is short-lived, owner/admin-only, never logged or retained (plan §6.4)
+        this.clearWatchdog(accountId);
         this.emit('pairing.qr', { accountId, qr: update.qr });
       }
       const status = update.connection;
@@ -184,13 +187,43 @@ export class Engine {
       if (status === 'close') {
         const reason = (update.lastDisconnect?.error as any)?.output?.status;
         const errMsg = String(update.lastDisconnect?.error?.message ?? '');
+        this.lastConnError.set(accountId, errMsg);
         log.warn(
           { accountId, status, reason, err: errMsg.slice(0, 200) },
           'whatsapp connection closed — retrying (pairing QR will appear once the handshake completes)',
         );
       }
+      if (status === 'open') {
+        // Fully linked + WebSocket open — pairing no longer expected.
+        this.clearWatchdog(accountId);
+        this.lastConnError.delete(accountId);
+      }
       this.mapState(accountId, status, update.lastDisconnect?.error);
     });
+
+    // Pairing watchdog: if no QR arrived within 150s (cloud runtime IPs are
+    // often rate-limited/blocked by WhatsApp — TLS handshakes abort with
+    // SSL alert 0), report FAILED so the Brain records the real network error
+    // and the pairing UI stops the infinite spinner instead of hanging.
+    this.qrWatchdogs.set(
+      accountId,
+      setTimeout(() => {
+        const h = this.sessions.get(accountId);
+        if (!h || h.disconnected) return;
+        if (h.socket.user?.id) return; // already linked
+        const lastErr = this.lastConnError.get(accountId) ?? '';
+        this.emit('session.status', {
+          accountId,
+          state: 'FAILED',
+          reason: `pairing_timeout_no_qr${lastErr ? ` (${lastErr.slice(0, 120)})` : ''}`,
+          epoch,
+        });
+        log.warn(
+          { accountId, lastErr: lastErr.slice(0, 160) },
+          'no pairing QR within 150s — reported FAILED (WhatsApp may be blocking this runtime IP; try restarting the space to rotate the IP)',
+        );
+      }, 150_000),
+    );
 
     sock.ev.on('messages.upsert', (m) => {
       for (const msg of m.messages ?? []) {
@@ -213,6 +246,15 @@ export class Engine {
     });
   }
 
+  /** Cancel a session's pairing watchdog (QR received / linked / session ended). */
+  private clearWatchdog(accountId: string): void {
+    const t = this.qrWatchdogs.get(accountId);
+    if (t) {
+      clearTimeout(t);
+      this.qrWatchdogs.delete(accountId);
+    }
+  }
+
   async sendMessage(accountId: string, toJid: string, text?: string): Promise<void> {
     const h = this.sessions.get(accountId);
     if (!h || h.disconnected) {
@@ -228,8 +270,10 @@ export class Engine {
   }
 
 /** Command: disconnect the transport but keep auth snapshot (plan §6.3). */
-  async disconnectSession(accountId: string): Promise<void> {
+async disconnectSession(accountId: string): Promise<void> {
     const h = this.sessions.get(accountId);
+    this.clearWatchdog(accountId);
+    this.lastConnError.delete(accountId);
     if (!h) return;
     h.disconnected = true;
     try { h.socket.end(gracefulEnd()); } catch {}
@@ -239,6 +283,8 @@ export class Engine {
 
   async revokeSession(accountId: string): Promise<void> {
     const h = this.sessions.get(accountId);
+    this.clearWatchdog(accountId);
+    this.lastConnError.delete(accountId);
     if (h) {
       try { await h.socket.logout(); } catch {}
       h.disconnected = true;
@@ -255,6 +301,9 @@ export class Engine {
 
   /** Graceful shutdown: end sockets, wipe temp dirs, close control channel. */
   async stopAll(): Promise<void> {
+    for (const t of this.qrWatchdogs.values()) clearTimeout(t);
+    this.qrWatchdogs.clear();
+    this.lastConnError.clear();
     for (const h of this.sessions.values()) {
       try { h.socket.end(gracefulEnd()); } catch {}
       try { fs.rmSync(h.dir, { recursive: true, force: true }); } catch {}
