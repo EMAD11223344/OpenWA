@@ -20,9 +20,16 @@ ENV DATABASE_CONNECTION_URI=postgresql://postgres:postgres@localhost:5432/evolut
 ENV LOG_LEVEL=INFO
 ENV LOG_COLOR=true
 
+# Copy auto-schema initialization entrypoint script
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
 # Ensure workspace directories exist with full write access
 RUN mkdir -p /app/instances /app/store /app/public && \
     chmod -R 777 /app/instances /app/store /app/public
 
 # Expose HF Spaces default port
 EXPOSE 7860
+
+ENTRYPOINT ["/app/entrypoint.sh"]
+CMD ["npm", "run", "start:prod"]
