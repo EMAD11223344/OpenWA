@@ -25,17 +25,18 @@ An open-source WhatsApp API based on Baileys ([evolution-foundation/evolution-ap
 
 ## 🔑 Environment Configuration
 
-Set these environment variables in your Hugging Face Space Settings or local `.env` file:
+Default environment variables are pre-configured in the `Dockerfile` so the Space starts cleanly out of the box without requiring a database (`DATABASE_ENABLED=false`).
 
-| Variable | Description | Default / Recommended |
+If you wish to use PostgreSQL persistence, add these variables/secrets in your **Hugging Face Space Settings -> Variables and Secrets**:
+
+| Variable | Description | Recommended Value |
 |---|---|---|
 | `SERVER_PORT` | HTTP Listening Port | `7860` |
-| `AUTHENTICATION_API_KEY` | Global API Key for header auth (`apikey`) | `your-secure-api-key` |
+| `AUTHENTICATION_API_KEY` | Global API Key for header auth (`apikey`) | `your-custom-api-key` |
 | `SERVER_URL` | Public URL of your deployed Space | `https://myarenaosx-openwa.hf.space` |
-| `DATABASE_PROVIDER` | Database backend (`local` / `postgres`) | `local` |
-| `DATABASE_SAVE_DATA_INSTANCE` | Save instance state to DB | `true` |
-| `DATABASE_SAVE_DATA_NEW_MESSAGE` | Save incoming/outgoing messages | `true` |
-| `DEL_INSTANCE` | Auto delete instance on logout | `false` |
+| `DATABASE_ENABLED` | Enable DB persistence | `false` (default) or `true` |
+| `DATABASE_PROVIDER` | Database engine (`postgresql` or `mysql`) | `postgresql` |
+| `DATABASE_CONNECTION_URI` | PostgreSQL/MySQL Connection String | `postgresql://user:pass@host:5432/dbname` |
 | `LOG_LEVEL` | Logging detail (`ERROR`, `WARN`, `INFO`, `DEBUG`) | `INFO` |
 
 ---
