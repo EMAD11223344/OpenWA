@@ -11,6 +11,11 @@ ENV AUTHENTICATION_TYPE=apikey
 ENV AUTHENTICATION_API_KEY=evolution_secret_key_7860
 ENV SERVER_URL=https://myarenaosx-openwa.hf.space
 
+# WebSocket & QR Code Settings for Baileys Engine
+ENV WEBSOCKET_ENABLED=true
+ENV CONFIG_SESSION_PHONE_CLIENT="Evolution API"
+ENV QRCODE_LIMIT=30
+
 # Database Configuration (Disabled by default for standalone HF Spaces execution; enable & set URI in HF Secrets if using Postgres)
 ENV DATABASE_ENABLED=false
 ENV DATABASE_PROVIDER=postgresql
