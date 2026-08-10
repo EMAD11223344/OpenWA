@@ -10,6 +10,10 @@ ENV NODE_ENV=production
 ENV AUTHENTICATION_TYPE=apikey
 ENV AUTHENTICATION_API_KEY=evolution_secret_key_7860
 ENV SERVER_URL=https://myarenaosx-openwa.hf.space
+ENV AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES=true
+
+# Instance Retention (Do not auto-delete un-paired instances)
+ENV DEL_INSTANCE=false
 
 # WebSocket & Real-time QR Code Event Broadcasts
 ENV WEBSOCKET_ENABLED=true
@@ -19,8 +23,15 @@ ENV QRCODE_LIMIT=30
 
 # Fast Connection & Disable Full History Sync (Prevents Pre-key upload timeout)
 ENV CONFIG_SESSION_PHONE_SYNC_FULL_HISTORY=false
+ENV DATABASE_SAVE_DATA_HISTORIC=false
 ENV DATABASE_SAVE_DATA_CHATS=false
 ENV DATABASE_SAVE_DATA_CONTACTS=false
+
+# Default Event Toggles for Webhooks / WebSockets
+ENV WEBHOOK_EVENTS_QRCODE_UPDATED=true
+ENV WEBHOOK_EVENTS_CONNECTION_UPDATE=true
+ENV WEBHOOK_EVENTS_MESSAGES_UPSERT=true
+ENV WEBHOOK_EVENTS_SEND_MESSAGE=true
 
 # Database Configuration (Disabled by default for standalone HF Spaces execution; enable & set URI in HF Secrets if using Postgres)
 ENV DATABASE_ENABLED=false
