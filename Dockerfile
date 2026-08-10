@@ -17,6 +17,11 @@ ENV WEBSOCKET_GLOBAL_EVENTS=true
 ENV CONFIG_SESSION_PHONE_CLIENT="Evolution API"
 ENV QRCODE_LIMIT=30
 
+# Fast Connection & Disable Full History Sync (Prevents Pre-key upload timeout)
+ENV CONFIG_SESSION_PHONE_SYNC_FULL_HISTORY=false
+ENV DATABASE_SAVE_DATA_CHATS=false
+ENV DATABASE_SAVE_DATA_CONTACTS=false
+
 # Database Configuration (Disabled by default for standalone HF Spaces execution; enable & set URI in HF Secrets if using Postgres)
 ENV DATABASE_ENABLED=false
 ENV DATABASE_PROVIDER=postgresql
