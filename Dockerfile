@@ -11,8 +11,9 @@ ENV AUTHENTICATION_TYPE=apikey
 ENV AUTHENTICATION_API_KEY=evolution_secret_key_7860
 ENV SERVER_URL=https://myarenaosx-openwa.hf.space
 
-# WebSocket & QR Code Settings for Baileys Engine
+# WebSocket & Real-time QR Code Event Broadcasts
 ENV WEBSOCKET_ENABLED=true
+ENV WEBSOCKET_GLOBAL_EVENTS=true
 ENV CONFIG_SESSION_PHONE_CLIENT="Evolution API"
 ENV QRCODE_LIMIT=30
 
