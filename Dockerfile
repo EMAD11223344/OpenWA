@@ -54,4 +54,4 @@ RUN mkdir -p /app/instances /app/store /app/public && \
 EXPOSE 7860
 
 ENTRYPOINT ["/app/entrypoint.sh"]
-CMD ["npm", "run", "start:prod"]
+CMD ["node", "dist/main"]
