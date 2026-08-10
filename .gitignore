@@ -1,0 +1,22 @@
+# Dependency & Build files
+node_modules/
+dist/
+build/
+
+# Evolution API Local Data Stores
+instances/
+store/
+public/
+*.db
+*.sqlite
+
+# Environment & Secret files
+.env
+.env.local
+*.pem
+
+# IDE & OS files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
