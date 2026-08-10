@@ -10,7 +10,7 @@ pinned: false
 
 # Evolution API v2 - Hugging Face & GitHub Service
 
-An open-source WhatsApp API based on Baileys, deployed on **Hugging Face Spaces** (`myarenaosx/openwa`) and mirrored via **GitHub** (`EMAD11223344/OpenWA`).
+An open-source WhatsApp API based on Baileys ([evolution-foundation/evolution-api](https://github.com/evolution-foundation/evolution-api)), deployed on **Hugging Face Spaces** (`myarenaosx/openwa`) and mirrored via **GitHub** (`EMAD11223344/OpenWA`).
 
 ---
 
