@@ -1,27 +1,36 @@
-#!/bin/sh
+#!/bin/bash
 set -e
 
-# Start Redis in background (not daemonized, so we can track it)
-if command -v redis-server >/dev/null 2>&1; then
-  echo "==> [Entrypoint] Starting Redis on 127.0.0.1:6379..."
-  redis-server --bind 127.0.0.1 --port 6379 &
-  sleep 2  # Wait for Redis to be ready
-  
-  # Verify Redis is actually running
-  if redis-cli ping | grep -q "PONG"; then
-    echo "==> [Entrypoint] Redis is UP."
-  else
-    echo "==> [Entrypoint] WARNING: Redis failed to start!"
-  fi
+# Start PostgreSQL
+echo "==> [Entrypoint] Starting PostgreSQL..."
+mkdir -p /run/postgresql
+chown postgres:postgres /run/postgresql
+su - postgres -c "pg_ctl start -D /var/lib/postgresql/data -l /var/lib/postgresql/logfile"
+
+# Wait for PostgreSQL to be ready
+until su - postgres -c "pg_isready -q"; do
+  echo "Waiting for PostgreSQL..."
+  sleep 1
+done
+echo "==> PostgreSQL is ready!"
+
+# Start Redis in background
+echo "==> [Entrypoint] Starting Redis..."
+redis-server --bind 127.0.0.1 --port 6379 &
+sleep 2
+
+# Verify Redis
+if redis-cli ping 2>/dev/null | grep -q "PONG"; then
+  echo "==> Redis is ready!"
 else
-  echo "==> [Entrypoint] WARNING: redis-server not found!"
+  echo "==> WARNING: Redis not responding!"
 fi
 
-# Run Prisma migrations (REQUIRED for v2)
-if [ "$DATABASE_ENABLED" = "true" ] && [ -n "$DATABASE_CONNECTION_URI" ]; then
-  echo "==> [Entrypoint] Running database migrations..."
-  npx prisma migrate deploy || true
-fi
+# ✅ Run original database deployment (Prisma migrations)
+echo "==> [Entrypoint] Deploying database..."
+cd /evolution
+. ./Docker/scripts/deploy_database.sh
 
+# Start API
 echo "==> [Entrypoint] Starting Evolution API..."
-exec "$@"
+exec npm run start:prod
