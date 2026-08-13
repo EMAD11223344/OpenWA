@@ -35,10 +35,11 @@ ENV WEBHOOK_EVENTS_CONNECTION_UPDATE=true
 ENV WEBHOOK_EVENTS_MESSAGES_UPSERT=true
 ENV WEBHOOK_EVENTS_SEND_MESSAGE=true
 
-# Database Configuration (Disabled by default for standalone HF Spaces execution; enable & set URI in HF Secrets if using Postgres)
+# Database & Cache Configuration
 ENV DATABASE_ENABLED=false
 ENV DATABASE_PROVIDER=postgresql
 ENV DATABASE_CONNECTION_URI=postgresql://postgres:postgres@localhost:5432/evolution
+ENV CACHE_REDIS_ENABLED=false
 
 # Logging
 ENV LOG_LEVEL=INFO
