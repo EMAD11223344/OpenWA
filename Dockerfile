@@ -7,7 +7,7 @@ USER root
 # This proxy existed in the original WAHA/neonize build (commits e59e86d / 3ce52ed /
 # c2fc5cf) and was dropped during the migration to the Evolution API image
 # (commit 8134104 "Clear OpenWA repo") — the root cause of the empty QR code.
-RUN apk add --no-cache tor privoxy
+RUN apk add --no-cache tor
 
 # Configure Hugging Face Docker SDK Port (7860)
 ENV SERVER_PORT=7860
@@ -40,13 +40,14 @@ ENV WEBHOOK_EVENTS_SEND_MESSAGE=true
 ENV CACHE_REDIS_ENABLED=false
 ENV CACHE_LOCAL_ENABLED=true
 
-# Global HTTP proxy (Privoxy → Tor SOCKS5) — routes Baileys / WhatsApp Web through
-# a non-datacenter IP so WhatsApp actually returns a QR code. PROXY_PROTOCOL=http is
-# the value officially supported by Evolution API's global proxy.
+# Global SOCKS5 proxy (embedded Tor) — routes Baileys / WhatsApp Web through a
+# non-datacenter IP so WhatsApp actually returns a QR code.
+# Confirmed against official source (src/utils/makeProxyAgent.ts): PROXY_PROTOCOL
+# accepts http | socks | socks5, so pointing directly at Tor's SOCKS5 port works.
 # Override these with HF Space secrets if you prefer a residential/mobile proxy.
 ENV PROXY_HOST=127.0.0.1
-ENV PROXY_PORT=8118
-ENV PROXY_PROTOCOL=http
+ENV PROXY_PORT=9050
+ENV PROXY_PROTOCOL=socks5
 
 # Database Configuration
 ENV DATABASE_ENABLED=false
