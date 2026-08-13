@@ -40,6 +40,7 @@ ENV DATABASE_ENABLED=false
 ENV DATABASE_PROVIDER=postgresql
 ENV DATABASE_CONNECTION_URI=postgresql://postgres:postgres@localhost:5432/evolution
 ENV CACHE_REDIS_ENABLED=false
+ENV CACHE_LOCAL_ENABLED=true
 
 # Logging
 ENV LOG_LEVEL=INFO
