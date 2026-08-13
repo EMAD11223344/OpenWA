@@ -1,6 +1,14 @@
 # Evolution API v2 Container for Hugging Face Spaces & Docker Deployments
 FROM evoapicloud/evolution-api:latest
 
+USER root
+
+# Embed Tor SOCKS5 proxy to bypass the Hugging Face / AWS datacenter IP block.
+# This proxy existed in the original WAHA/neonize build (commits e59e86d / 3ce52ed /
+# c2fc5cf) and was dropped during the migration to the Evolution API image
+# (commit 8134104 "Clear OpenWA repo") — the root cause of the empty QR code.
+RUN apk add --no-cache tor privoxy
+
 # Configure Hugging Face Docker SDK Port (7860)
 ENV SERVER_PORT=7860
 ENV PORT=7860
@@ -31,6 +39,14 @@ ENV WEBHOOK_EVENTS_SEND_MESSAGE=true
 # Cache (local in-memory; no Redis available on HF Spaces)
 ENV CACHE_REDIS_ENABLED=false
 ENV CACHE_LOCAL_ENABLED=true
+
+# Global HTTP proxy (Privoxy → Tor SOCKS5) — routes Baileys / WhatsApp Web through
+# a non-datacenter IP so WhatsApp actually returns a QR code. PROXY_PROTOCOL=http is
+# the value officially supported by Evolution API's global proxy.
+# Override these with HF Space secrets if you prefer a residential/mobile proxy.
+ENV PROXY_HOST=127.0.0.1
+ENV PROXY_PORT=8118
+ENV PROXY_PROTOCOL=http
 
 # Database Configuration
 ENV DATABASE_ENABLED=false
