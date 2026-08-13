@@ -1,5 +1,5 @@
 # Evolution API v2 for Hugging Face Spaces
-FROM evoapicloud/evolution-api:v2.3.6
+FROM evoapicloud/evolution-api:latest
 
 USER root
 
