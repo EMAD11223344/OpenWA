@@ -21,13 +21,8 @@ ENV WEBSOCKET_GLOBAL_EVENTS=true
 ENV CONFIG_SESSION_PHONE_CLIENT="Evolution API"
 ENV QRCODE_LIMIT=30
 
-# Fast Connection & Live Data Persistence
+# Fast Connection & Disable Full History Sync (Prevents Pre-key upload timeout)
 ENV CONFIG_SESSION_PHONE_SYNC_FULL_HISTORY=false
-ENV DATABASE_SAVE_DATA_INSTANCE=true
-ENV DATABASE_SAVE_DATA_NEW_MESSAGE=true
-ENV DATABASE_SAVE_MESSAGE_UPDATE=true
-ENV DATABASE_SAVE_DATA_CONTACTS=true
-ENV DATABASE_SAVE_DATA_CHATS=true
 
 # Default Event Toggles for Webhooks / WebSockets
 ENV WEBHOOK_EVENTS_QRCODE_UPDATED=true
@@ -35,29 +30,25 @@ ENV WEBHOOK_EVENTS_CONNECTION_UPDATE=true
 ENV WEBHOOK_EVENTS_MESSAGES_UPSERT=true
 ENV WEBHOOK_EVENTS_SEND_MESSAGE=true
 
-# Database & Cache Configuration
+# Database Configuration
 ENV DATABASE_ENABLED=false
 ENV DATABASE_PROVIDER=postgresql
 ENV DATABASE_CONNECTION_URI=postgresql://postgres:postgres@localhost:5432/evolution
-ENV CACHE_REDIS_ENABLED=false
-ENV CACHE_LOCAL_ENABLED=true
 
 # Logging
 ENV LOG_LEVEL=INFO
 ENV LOG_COLOR=true
 
-WORKDIR /evolution
-
 # Copy auto-schema initialization entrypoint script
-COPY entrypoint.sh /evolution/entrypoint.sh
-RUN chmod +x /evolution/entrypoint.sh
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
 
 # Ensure workspace directories exist with full write access
-RUN mkdir -p /evolution/instances /evolution/store /evolution/public && \
-    chmod -R 777 /evolution/instances /evolution/store /evolution/public
+RUN mkdir -p /app/instances /app/store /app/public && \
+    chmod -R 777 /app/instances /app/store /app/public
 
 # Expose HF Spaces default port
 EXPOSE 7860
 
-ENTRYPOINT ["/evolution/entrypoint.sh"]
-CMD ["node", "dist/main"]
+ENTRYPOINT ["/app/entrypoint.sh"]
+CMD ["npm", "run", "start:prod"]
