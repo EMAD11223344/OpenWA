@@ -1,5 +1,5 @@
 # Evolution API v2 Container for Hugging Face Spaces & Docker Deployments
-FROM evoapicloud/evolution-api:latest
+FROM evoapicloud/evolution-api:v2.3.7
 
 USER root
 
