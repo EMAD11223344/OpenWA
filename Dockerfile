@@ -1,80 +1,64 @@
-# Evolution API v2 Container for Hugging Face Spaces & Docker Deployments
+# Evolution API v2.3.6 for Hugging Face Spaces
 FROM evoapicloud/evolution-api:v2.3.6
 
 USER root
 
-# Configure Hugging Face Docker SDK Port (7860)
+# Install Redis (embedded) + supervisor to manage processes
+RUN apt-get update && apt-get install -y redis-server supervisor && rm -rf /var/lib/apt/lists/*
+
+# HF Spaces requires port 7860
 ENV SERVER_PORT=7860
 ENV PORT=7860
 ENV NODE_ENV=production
 
-# Security & Default Auth Key
-# AUTHENTICATION_API_KEY is deliberately NOT set here. Add it as a
-# "Repository secret" in the Space's Settings instead — HF injects
-# secrets as runtime env vars, so the app picks it up the same way.
-# A key baked into the image is visible to anyone who can see the repo.
+# Auth & Server
 ENV AUTHENTICATION_TYPE=apikey
-ENV SERVER_URL=https://myarenaosx-openwa.hf.space
+ENV AUTHENTICATION_API_KEY=evolution_secret_key_7860
+ENV SERVER_URL=https://your-username-your-space.hf.space  # <-- غيّر ده لـ URL بتاعك
 ENV AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES=true
 
-# Instance Retention
+# Instance settings
 ENV DEL_INSTANCE=false
+ENV DEL_INSTANCE_ON_DISCONNECT=false
 
-# WebSocket & QR Code Event Broadcasts
+# WebSocket & QR
 ENV WEBSOCKET_ENABLED=true
 ENV WEBSOCKET_GLOBAL_EVENTS=true
 ENV WEBSOCKET_ALLOWED_HOSTS=*
 ENV CONFIG_SESSION_PHONE_CLIENT="Chrome (Windows)"
 ENV CONFIG_SESSION_PHONE_NAME="Windows"
-# CONFIG_SESSION_PHONE_VERSION is deliberately left unset. evolution-api
-# auto-fetches the current WhatsApp Web version at startup when this is
-# empty — that behavior was added specifically so people stop hardcoding
-# a value that goes stale within weeks and breaks pairing. If auto-fetch
-# ever fails (e.g. an outbound network hiccup on HF's side), check
-# github.com/wppconnect-team/wa-version for a current value and set it
-# as a Space runtime variable — not back in this file.
 ENV QRCODE_LIMIT=60
 
-# CORS Configuration for Browser & Manager UI
-# CORS_ORIGIN can't be "*" while CORS_CREDENTIALS=true — browsers reject
-# that combination outright, which silently breaks credentialed fetches
-# from the Manager UI (status/QR polling). Scoped to the Space's own
-# origin below; add more comma-separated origins if another frontend
-# needs credentialed access.
-ENV CORS_ORIGIN=https://myarenaosx-openwa.hf.space
+# CORS
+ENV CORS_ORIGIN=*
 ENV CORS_METHODS=GET,POST,PUT,DELETE
 ENV CORS_CREDENTIALS=true
 
-# Cache Configuration — local in-process cache instead of Redis.
-# CACHE_REDIS_ENABLED=true is unreliable on evolution-api v2.3.6 (the
-# Redis client disconnects intermittently, which blocks QR generation)
-# and buys nothing in a single-instance deployment — Redis only matters
-# once you're sharing cache across multiple instances.
-ENV CACHE_LOCAL_ENABLED=true
-ENV CACHE_REDIS_ENABLED=false
+# Cache (Embedded Redis)
+ENV CACHE_REDIS_ENABLED=true
+ENV CACHE_REDIS_URI=redis://127.0.0.1:6379/6
+ENV CACHE_REDIS_PREFIX_KEY=evolution
 
-# Force IPv4 DNS order & low autoselection timeout
-ENV NODE_OPTIONS="--dns-result-order=ipv4first --network-family-autoselection-attempt-timeout=500"
-
-# Database Configuration
-ENV DATABASE_ENABLED=false
+# Database (Required for v2!)
+ENV DATABASE_ENABLED=true
 ENV DATABASE_PROVIDER=postgresql
-ENV DATABASE_CONNECTION_URI=postgresql://postgres:postgres@localhost:5432/evolution
+ENV DATABASE_CONNECTION_URI=postgresql://postgres:postgres@localhost:5432/evolution?schema=public
 
 # Logging
 ENV LOG_LEVEL=INFO
 ENV LOG_COLOR=true
 
-# Copy auto-schema initialization entrypoint script
-COPY entrypoint.sh /app/entrypoint.sh
-RUN chmod +x /app/entrypoint.sh
+# DNS & Network stability
+ENV NODE_OPTIONS="--dns-result-order=ipv4first --network-family-autoselection-attempt-timeout=500"
 
-# Ensure workspace directories exist with full write access
-RUN mkdir -p /app/instances /app/store /app/public && \
-    chmod -R 777 /app/instances /app/store /app/public
+# Create supervisor config to run Redis + API together
+RUN mkdir -p /var/log/supervisor
+COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
-# Expose HF Spaces default port
+# Fix paths for Evolution API (not /app!)
+RUN mkdir -p /evolution/instances /evolution/store /evolution/public && \
+    chmod -R 777 /evolution/instances /evolution/store /evolution/public
+
 EXPOSE 7860
 
-ENTRYPOINT ["/app/entrypoint.sh"]
-CMD ["npm", "run", "start:prod"]
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
