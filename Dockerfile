@@ -18,17 +18,19 @@ ENV DEL_INSTANCE=false
 # WebSocket & Real-time QR Code Event Broadcasts
 ENV WEBSOCKET_ENABLED=true
 ENV WEBSOCKET_GLOBAL_EVENTS=true
+ENV WEBSOCKET_ALLOWED_HOSTS=myarenaosx-openwa.hf.space
 ENV CONFIG_SESSION_PHONE_CLIENT="Evolution API"
 ENV QRCODE_LIMIT=30
-
-# Fast Connection & Disable Full History Sync (Prevents Pre-key upload timeout)
-ENV CONFIG_SESSION_PHONE_SYNC_FULL_HISTORY=false
 
 # Default Event Toggles for Webhooks / WebSockets
 ENV WEBHOOK_EVENTS_QRCODE_UPDATED=true
 ENV WEBHOOK_EVENTS_CONNECTION_UPDATE=true
 ENV WEBHOOK_EVENTS_MESSAGES_UPSERT=true
 ENV WEBHOOK_EVENTS_SEND_MESSAGE=true
+
+# Cache (local in-memory; no Redis available on HF Spaces)
+ENV CACHE_REDIS_ENABLED=false
+ENV CACHE_LOCAL_ENABLED=true
 
 # Database Configuration
 ENV DATABASE_ENABLED=false
