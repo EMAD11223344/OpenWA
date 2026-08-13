@@ -38,8 +38,8 @@ ENV CACHE_REDIS_URI=redis://127.0.0.1:6379/6
 ENV CACHE_REDIS_PREFIX_KEY=evolution
 ENV CACHE_LOCAL_ENABLED=false
 
-# IPv6 autoselection timeout: community-documented fix for "QR code not appearing"
-ENV NODE_OPTIONS=--network-family-autoselection-attempt-timeout=1000
+# Force IPv4 DNS order & low autoselection timeout to eliminate WebSocket handshake timeouts
+ENV NODE_OPTIONS="--dns-result-order=ipv4first --network-family-autoselection-attempt-timeout=500"
 
 # Database Configuration
 ENV DATABASE_ENABLED=false
