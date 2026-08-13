@@ -3,17 +3,17 @@ FROM evoapicloud/evolution-api:v2.3.6
 
 USER root
 
-# Install lightweight embedded Redis server for native cache layer
-RUN apk add --no-cache redis
-
 # Configure Hugging Face Docker SDK Port (7860)
 ENV SERVER_PORT=7860
 ENV PORT=7860
 ENV NODE_ENV=production
 
 # Security & Default Auth Key
+# AUTHENTICATION_API_KEY is deliberately NOT set here. Add it as a
+# "Repository secret" in the Space's Settings instead — HF injects
+# secrets as runtime env vars, so the app picks it up the same way.
+# A key baked into the image is visible to anyone who can see the repo.
 ENV AUTHENTICATION_TYPE=apikey
-ENV AUTHENTICATION_API_KEY=evolution_secret_key_7860
 ENV SERVER_URL=https://myarenaosx-openwa.hf.space
 ENV AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES=true
 
@@ -26,18 +26,32 @@ ENV WEBSOCKET_GLOBAL_EVENTS=true
 ENV WEBSOCKET_ALLOWED_HOSTS=*
 ENV CONFIG_SESSION_PHONE_CLIENT="Chrome (Windows)"
 ENV CONFIG_SESSION_PHONE_NAME="Windows"
-# تم حذف سطر الإصدار الخاطئ
+# CONFIG_SESSION_PHONE_VERSION is deliberately left unset. evolution-api
+# auto-fetches the current WhatsApp Web version at startup when this is
+# empty — that behavior was added specifically so people stop hardcoding
+# a value that goes stale within weeks and breaks pairing. If auto-fetch
+# ever fails (e.g. an outbound network hiccup on HF's side), check
+# github.com/wppconnect-team/wa-version for a current value and set it
+# as a Space runtime variable — not back in this file.
 ENV QRCODE_LIMIT=60
 
 # CORS Configuration for Browser & Manager UI
-ENV CORS_ORIGIN=*
+# CORS_ORIGIN can't be "*" while CORS_CREDENTIALS=true — browsers reject
+# that combination outright, which silently breaks credentialed fetches
+# from the Manager UI (status/QR polling). Scoped to the Space's own
+# origin below; add more comma-separated origins if another frontend
+# needs credentialed access.
+ENV CORS_ORIGIN=https://myarenaosx-openwa.hf.space
 ENV CORS_METHODS=GET,POST,PUT,DELETE
 ENV CORS_CREDENTIALS=true
 
-# Cache Configuration (Embedded Redis on localhost)
-ENV CACHE_REDIS_ENABLED=true
-ENV CACHE_REDIS_URI=redis://127.0.0.1:6379/6
-ENV CACHE_REDIS_PREFIX_KEY=evolution
+# Cache Configuration — local in-process cache instead of Redis.
+# CACHE_REDIS_ENABLED=true is unreliable on evolution-api v2.3.6 (the
+# Redis client disconnects intermittently, which blocks QR generation)
+# and buys nothing in a single-instance deployment — Redis only matters
+# once you're sharing cache across multiple instances.
+ENV CACHE_LOCAL_ENABLED=true
+ENV CACHE_REDIS_ENABLED=false
 
 # Force IPv4 DNS order & low autoselection timeout
 ENV NODE_OPTIONS="--dns-result-order=ipv4first --network-family-autoselection-attempt-timeout=500"

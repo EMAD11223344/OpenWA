@@ -1,11 +1,12 @@
 #!/bin/sh
 set -e
 
-# Start local Redis server if installed
-if command -v redis-server >/dev/null 2>&1; then
-  echo "==> [Evolution API Entrypoint] Starting embedded Redis daemon..."
-  redis-server --daemonize yes || echo "WARNING: Failed to start embedded Redis"
-fi
+# No embedded Redis here on purpose — this image now runs on
+# CACHE_LOCAL_ENABLED instead of CACHE_REDIS_ENABLED (see Dockerfile).
+# That sidesteps both the startup race condition an embedded redis-server
+# would have had (daemonize returns before the daemon is actually ready)
+# and a known Redis-client instability in this evolution-api version that
+# was blocking QR generation.
 
 # Automatically run database migrations when DATABASE_ENABLED=true
 if [ "$DATABASE_ENABLED" = "true" ] && [ -n "$DATABASE_CONNECTION_URI" ]; then
