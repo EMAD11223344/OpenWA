@@ -46,16 +46,18 @@ ENV CACHE_LOCAL_ENABLED=true
 ENV LOG_LEVEL=INFO
 ENV LOG_COLOR=true
 
+WORKDIR /evolution
+
 # Copy auto-schema initialization entrypoint script
-COPY entrypoint.sh /app/entrypoint.sh
-RUN chmod +x /app/entrypoint.sh
+COPY entrypoint.sh /evolution/entrypoint.sh
+RUN chmod +x /evolution/entrypoint.sh
 
 # Ensure workspace directories exist with full write access
-RUN mkdir -p /app/instances /app/store /app/public && \
-    chmod -R 777 /app/instances /app/store /app/public
+RUN mkdir -p /evolution/instances /evolution/store /evolution/public && \
+    chmod -R 777 /evolution/instances /evolution/store /evolution/public
 
 # Expose HF Spaces default port
 EXPOSE 7860
 
-ENTRYPOINT ["/app/entrypoint.sh"]
+ENTRYPOINT ["/evolution/entrypoint.sh"]
 CMD ["node", "dist/main"]
