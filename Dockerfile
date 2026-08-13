@@ -1,5 +1,5 @@
 # Evolution API v2 Container for Hugging Face Spaces & Docker Deployments
-FROM atendai/evolution-api:v2.2.0
+FROM evoapicloud/evolution-api:v2.2.2
 
 # Configure Hugging Face Docker SDK Port (7860)
 ENV SERVER_PORT=7860
