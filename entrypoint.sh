@@ -17,7 +17,7 @@ cat >> /etc/privoxy/config <<'EOF'
 listen-address 127.0.0.1:8118
 forward-socks5 / 127.0.0.1:9050 .
 EOF
-privoxy --daemon /etc/privoxy/config || echo "WARNING: Privoxy failed to start."
+privoxy /etc/privoxy/config || echo "WARNING: Privoxy failed to start."
 
 # Automatically run database migrations when DATABASE_ENABLED=true
 if [ "$DATABASE_ENABLED" = "true" ] && [ -n "$DATABASE_CONNECTION_URI" ]; then
