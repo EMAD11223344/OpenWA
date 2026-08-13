@@ -20,6 +20,15 @@ tor -f /tmp/torrc || echo "WARNING: Tor failed to start."
   while [ $i -lt 180 ]; do
     if grep -q "Bootstrapped 100" /tmp/tor.log 2>/dev/null; then
       echo "TOR CHECK: Tor bootstrapped OK — proxy usable."
+      echo "WA CHECK: probing https://web.whatsapp.com through Tor (25s)..."
+      cd /evolution 2>/dev/null || true
+      node -e "
+const { SocksProxyAgent } = require('socks-proxy-agent');
+const agent = new SocksProxyAgent('socks5://127.0.0.1:9050');
+fetch('https://web.whatsapp.com', { agent, redirect: 'manual', signal: AbortSignal.timeout(25000) })
+  .then(r => console.log('WA CHECK: web.whatsapp.com responded status=' + r.status + ' (WhatsApp reachable through Tor)'))
+  .catch(e => console.log('WA CHECK: FAILED — ' + e.message + ' (WhatsApp rejects this Tor exit IP)'));
+" 2>&1 || echo "WA CHECK: node check unavailable"
       exit 0
     fi
     sleep 5

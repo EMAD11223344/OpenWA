@@ -1,6 +1,6 @@
 # Evolution API v2 for Hugging Face Spaces — clean rebuild from zero
 # Official image per evolution-foundation/evolution-api README (evoapicloud/evolution-api)
-FROM evoapicloud/evolution-api:v2.3.7
+FROM evoapicloud/evolution-api:v2.3.6
 
 USER root
 
