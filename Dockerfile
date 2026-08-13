@@ -1,25 +1,22 @@
-# Evolution API v2.3.6 for Hugging Face Spaces
 FROM evoapicloud/evolution-api:v2.3.6
-
 USER root
 
-# Install Redis (embedded) + supervisor to manage processes
-RUN apt-get update && apt-get install -y redis-server supervisor && rm -rf /var/lib/apt/lists/*
+# ✅ ثبت Redis بـ apt-get (لأن الصورة Debian-based)
+RUN apt-get update && apt-get install -y redis-server && rm -rf /var/lib/apt/lists/*
 
-# HF Spaces requires port 7860
+# HF Spaces Port
 ENV SERVER_PORT=7860
 ENV PORT=7860
 ENV NODE_ENV=production
 
-# Auth & Server
+# Auth
 ENV AUTHENTICATION_TYPE=apikey
 ENV AUTHENTICATION_API_KEY=evolution_secret_key_7860
-ENV SERVER_URL=https://your-username-your-space.hf.space  # <-- غيّر ده لـ URL بتاعك
+ENV SERVER_URL=https://your-space-name.hf.space
 ENV AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES=true
 
-# Instance settings
+# Instance
 ENV DEL_INSTANCE=false
-ENV DEL_INSTANCE_ON_DISCONNECT=false
 
 # WebSocket & QR
 ENV WEBSOCKET_ENABLED=true
@@ -34,12 +31,12 @@ ENV CORS_ORIGIN=*
 ENV CORS_METHODS=GET,POST,PUT,DELETE
 ENV CORS_CREDENTIALS=true
 
-# Cache (Embedded Redis)
+# Cache
 ENV CACHE_REDIS_ENABLED=true
 ENV CACHE_REDIS_URI=redis://127.0.0.1:6379/6
 ENV CACHE_REDIS_PREFIX_KEY=evolution
 
-# Database (Required for v2!)
+# ✅ شغّل الداتابيز (مش تقدر تستغنى عنها في v2)
 ENV DATABASE_ENABLED=true
 ENV DATABASE_PROVIDER=postgresql
 ENV DATABASE_CONNECTION_URI=postgresql://postgres:postgres@localhost:5432/evolution?schema=public
@@ -48,17 +45,18 @@ ENV DATABASE_CONNECTION_URI=postgresql://postgres:postgres@localhost:5432/evolut
 ENV LOG_LEVEL=INFO
 ENV LOG_COLOR=true
 
-# DNS & Network stability
+# Network
 ENV NODE_OPTIONS="--dns-result-order=ipv4first --network-family-autoselection-attempt-timeout=500"
 
-# Create supervisor config to run Redis + API together
-RUN mkdir -p /var/log/supervisor
-COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
-
-# Fix paths for Evolution API (not /app!)
+# ✅ المسارات الصحيحة /evolution/ مش /app/
 RUN mkdir -p /evolution/instances /evolution/store /evolution/public && \
     chmod -R 777 /evolution/instances /evolution/store /evolution/public
 
+# Copy entrypoint
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
 EXPOSE 7860
 
-CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+ENTRYPOINT ["/app/entrypoint.sh"]
+CMD ["npm", "run", "start:prod"]
