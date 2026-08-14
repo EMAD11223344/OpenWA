@@ -13,8 +13,8 @@ if command -v redis-server >/dev/null 2>&1; then
   fi
 fi
 
-# 2. Map DATABASE_CONNECTION_URI to DATABASE_URL if needed
-if [ -z "$DATABASE_URL" ] && [ -n "$DATABASE_CONNECTION_URI" ]; then
+# 2. Always map DATABASE_CONNECTION_URI to DATABASE_URL if present
+if [ -n "$DATABASE_CONNECTION_URI" ]; then
   echo "==> [Gateway Entrypoint] Mapping DATABASE_CONNECTION_URI to DATABASE_URL..."
   export DATABASE_URL="$DATABASE_CONNECTION_URI"
 fi
@@ -23,7 +23,8 @@ fi
 if [ -n "$DATABASE_URL" ]; then
   echo "==> [Gateway Entrypoint] Synchronizing database tables with Prisma schema..."
   cd /app 2>/dev/null || true
-  npx prisma db push --schema=packages/database/prisma/schema.prisma --accept-data-loss || true
+  npx prisma db push --schema=packages/database/prisma/schema.prisma --accept-data-loss || \
+  npx prisma db push --schema=prisma/schema.prisma --accept-data-loss || true
 fi
 
 # 4. Start MultiWA Gateway API process
