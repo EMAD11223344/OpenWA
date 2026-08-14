@@ -702,13 +702,19 @@
         const data = args[0];
         if (!data) return;
 
+        // Only process events relevant to the active profile
+        const eventProfileId = data.profileId || data.id || data.sessionId;
+        if (activeProfileId && eventProfileId && eventProfileId !== activeProfileId) return;
+
         // Check for QR payloads
         if (event.includes('qr') || data.qr || data.qrCode || data.code) {
-          handleIncomingQr(data);
+          const qrVal = data.qr || data.qrCode || data.code || (typeof data === 'string' ? data : null);
+          if (qrVal) handleIncomingQr(qrVal);
+          else handleIncomingQr(data);
         }
 
         // Check for connection status payloads
-        if (data.status === 'connected' || event.includes('connected')) {
+        if (data.status === 'connected' || event.includes('connected') || event.includes('ready')) {
           onConnected();
         }
       });
@@ -859,6 +865,9 @@
                     <span>Connect QR</span>
                   </button>
                 `}
+                <button onclick="deleteProfile('${p.id}', '${p.displayName || p.name}')" class="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg bg-red-900/20 hover:bg-red-900/40 text-red-500 text-xs font-semibold border border-red-900/30 transition" title="Delete Session">
+                  <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                </button>
               </div>
             </div>
           </div>
@@ -928,37 +937,90 @@
 
     function startOfficialQrPolling() {
       if (qrPollTimer) clearInterval(qrPollTimer);
+      let pollCount = 0;
       
       const pollFunction = async () => {
         if (!activeProfileId) return;
+        pollCount++;
+        const elapsed = pollCount * 3;
+
+        // Update spinner text with elapsed time
+        const spinnerTitle = document.getElementById('qrSpinnerTitle');
+        const spinnerSub = document.getElementById('qrSpinnerSubtitle');
+        if (spinnerTitle && document.getElementById('qrLoadingSpinner') && !document.getElementById('qrLoadingSpinner').classList.contains('hidden')) {
+          if (elapsed < 15) {
+            spinnerTitle.innerText = 'Starting Chromium Engine...';
+            spinnerSub.innerText = `Loading WhatsApp Web (${elapsed}s)`;
+          } else if (elapsed < 40) {
+            spinnerTitle.innerText = 'Generating QR Code...';
+            spinnerSub.innerText = `Waiting for WhatsApp QR (${elapsed}s)`;
+          } else {
+            spinnerTitle.innerText = 'Still waiting...';
+            spinnerSub.innerText = `Engine may be slow — click Reconnect if needed`;
+          }
+        }
         
         try {
-          // A. Fetch from official Account Profile QR endpoint
-          if (currentAccountId) {
-            const qrRes = await apiFetch(`/api/v1/accounts/${currentAccountId}/profiles/${activeProfileId}/qr`);
-            if (qrRes.ok) {
-              const qrData = await qrRes.json();
-              if (qrData.qr) {
-                handleIncomingQr(qrData.qr);
+          // Try multiple QR endpoint patterns (official API)
+          let qrFound = false;
+
+          // Pattern A: Account-scoped endpoint
+          if (currentAccountId && !qrFound) {
+            try {
+              const r = await apiFetch(`/api/v1/accounts/${currentAccountId}/profiles/${activeProfileId}/qr`);
+              if (r.ok) {
+                const d = await r.json();
+                const qrVal = d.qr || d.qrCode || d.data?.qr || d.data?.qrCode;
+                if (qrVal) { handleIncomingQr(qrVal); qrFound = true; }
               }
-            }
+            } catch(e){}
           }
 
-          // B. Check Profile status for connected
-          const statusRes = await apiFetch(`/api/v1/profiles/${activeProfileId}/status`);
-          if (statusRes.ok) {
-            const sData = await statusRes.json();
-            if (sData.status === 'connected') {
-              onConnected();
-            }
+          // Pattern B: Direct profile QR endpoint
+          if (!qrFound) {
+            try {
+              const r = await apiFetch(`/api/v1/profiles/${activeProfileId}/qr`);
+              if (r.ok) {
+                const d = await r.json();
+                const qrVal = d.qr || d.qrCode || d.data?.qr || d.data?.qrCode;
+                if (qrVal) { handleIncomingQr(qrVal); qrFound = true; }
+              }
+            } catch(e){}
           }
+
+          // Pattern C: Profile status endpoint — look for embedded QR
+          if (!qrFound) {
+            try {
+              const r = await apiFetch(`/api/v1/profiles/${activeProfileId}/status`);
+              if (r.ok) {
+                const d = await r.json();
+                const qrVal = d.qr || d.qrCode || d.data?.qr;
+                if (qrVal) { handleIncomingQr(qrVal); qrFound = true; }
+                if (d.status === 'connected') { onConnected(); return; }
+              }
+            } catch(e){}
+          }
+
+          // Pattern D: Account-scoped status
+          if (currentAccountId) {
+            try {
+              const r = await apiFetch(`/api/v1/accounts/${currentAccountId}/profiles/${activeProfileId}/status`);
+              if (r.ok) {
+                const d = await r.json();
+                const qrVal = d.qr || d.qrCode || d.data?.qr;
+                if (qrVal && !qrFound) { handleIncomingQr(qrVal); qrFound = true; }
+                if (d.status === 'connected') { onConnected(); return; }
+              }
+            } catch(e){}
+          }
+
         } catch (e) {
           console.error('QR Poll error:', e);
         }
       };
 
       pollFunction();
-      qrPollTimer = setInterval(pollFunction, 2000);
+      qrPollTimer = setInterval(pollFunction, 3000);
     }
 
     function refreshQrCode() {
@@ -1019,13 +1081,56 @@
     async function disconnectProfile(id) {
       if (!confirm('Are you sure you want to disconnect this session?')) return;
       try {
-        await apiFetch(`/api/v1/profiles/${id}/disconnect`, {
-          method: 'POST',
-          body: JSON.stringify({})
-        });
+        let done = false;
+        if (currentAccountId) {
+          const r = await apiFetch(`/api/v1/accounts/${currentAccountId}/profiles/${id}/disconnect`, { method: 'POST', body: JSON.stringify({}) });
+          if (r.ok) done = true;
+        }
+        if (!done) {
+          await apiFetch(`/api/v1/profiles/${id}/disconnect`, { method: 'POST', body: JSON.stringify({}) });
+        }
         await loadWorkspacesAndProfiles();
       } catch (e) {
         console.error('Disconnect error:', e);
+      }
+    }
+
+    async function deleteProfile(id, name) {
+      if (!confirm(`Delete session "${name}" permanently? This will remove all data and stop the WhatsApp connection.`)) return;
+      try {
+        // 1. Disconnect first (graceful)
+        try {
+          if (currentAccountId) {
+            await apiFetch(`/api/v1/accounts/${currentAccountId}/profiles/${id}/disconnect`, { method: 'POST', body: JSON.stringify({}) });
+          } else {
+            await apiFetch(`/api/v1/profiles/${id}/disconnect`, { method: 'POST', body: JSON.stringify({}) });
+          }
+        } catch(e){}
+
+        // 2. Delete via account-scoped endpoint first (official), fallback to direct
+        let deleted = false;
+        if (currentAccountId) {
+          const r = await apiFetch(`/api/v1/accounts/${currentAccountId}/profiles/${id}`, { method: 'DELETE' });
+          if (r.ok || r.status === 204 || r.status === 200) deleted = true;
+          else if (r.status !== 404 && r.status !== 405) {
+            const err = await r.json().catch(() => ({}));
+            alert('Delete failed: ' + (err.message || r.status));
+            return;
+          }
+        }
+        if (!deleted) {
+          const r = await apiFetch(`/api/v1/profiles/${id}`, { method: 'DELETE' });
+          if (r.ok || r.status === 204 || r.status === 200) deleted = true;
+          else {
+            const err = await r.json().catch(() => ({}));
+            alert('Delete failed: ' + (err.message || r.status));
+            return;
+          }
+        }
+        if (deleted) await loadWorkspacesAndProfiles();
+      } catch (e) {
+        console.error('Delete error:', e);
+        alert('Error deleting profile: ' + e.message);
       }
     }
 
