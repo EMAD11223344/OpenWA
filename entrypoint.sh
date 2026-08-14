@@ -40,7 +40,29 @@ if [ -n "$DATABASE_URL" ]; then
   fi
 fi
 
-# 5. Start MultiWA Gateway API in resilient watchdog loop on internal port 3333
+# 5. Enforce Chromium Container Wrapper (Guarantees IPv4-First, Anti-Hang & Sandboxing in Docker)
+if [ -f /usr/bin/chromium ] && [ ! -f /usr/bin/chromium.real ]; then
+  echo "==> [Gateway Entrypoint] Setting up Chromium binary wrapper..."
+  mv /usr/bin/chromium /usr/bin/chromium.real
+  cat << 'EOF' > /usr/bin/chromium
+#!/bin/bash
+exec /usr/bin/chromium.real \
+  --no-sandbox \
+  --disable-setuid-sandbox \
+  --disable-dev-shm-usage \
+  --disable-gpu \
+  --no-first-run \
+  --no-zygote \
+  --single-process \
+  --dns-result-order=ipv4first \
+  --disable-features=IsolateOrigins,site-per-process \
+  --disable-web-security \
+  "$@"
+EOF
+  chmod +x /usr/bin/chromium
+fi
+
+# 6. Start MultiWA Gateway API in resilient watchdog loop on internal port 3333
 export PORT=3333
 export API_PORT=3333
 export API_HOST=0.0.0.0
@@ -52,7 +74,7 @@ export PUPPETEER_TIMEOUT=120000
 export NAVIGATION_TIMEOUT=120000
 export WHATSAPP_TIMEOUT=120000
 export QR_TIMEOUT=120000
-export PUPPETEER_ARGS="--no-sandbox,--disable-setuid-sandbox,--disable-dev-shm-usage,--disable-gpu,--no-first-run,--no-zygote,--single-process,--disable-extensions,--disable-default-apps,--dns-result-order=ipv4first"
+export PUPPETEER_ARGS="--no-sandbox,--disable-setuid-sandbox,--disable-dev-shm-usage,--disable-gpu,--no-first-run,--no-zygote,--single-process,--dns-result-order=ipv4first"
 export CHROMIUM_FLAGS="--no-sandbox --disable-setuid-sandbox --disable-dev-shm-usage --disable-gpu --no-first-run --no-zygote --single-process --dns-result-order=ipv4first"
 
 start_backend_watchdog() {
@@ -77,7 +99,7 @@ start_backend_watchdog() {
 
 start_backend_watchdog &
 
-# 6. Start Gateway Proxy & Dashboard on Port 7860 in foreground
+# 7. Start Gateway Proxy & Dashboard on Port 7860 in foreground
 echo "==> [Gateway Entrypoint] Starting MultiWA Dashboard & Gateway Proxy on port 7860..."
 export PORT=7860
 export TARGET_PORT=3333
