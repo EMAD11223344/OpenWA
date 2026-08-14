@@ -14,6 +14,7 @@ ENV PORT=7860
 ENV API_PORT=3333
 ENV API_HOST=0.0.0.0
 ENV NODE_ENV=production
+ENV NODE_OPTIONS="--dns-result-order=ipv4first"
 
 # Queue & Storage
 ENV REDIS_URL=redis://127.0.0.1:6379

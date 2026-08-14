@@ -67,8 +67,10 @@ EOF
   chmod +x /usr/bin/chromium
 fi
 
-# 5b. Instrument Engine Adapters to Cache Realtime QR in /tmp for Instant HTTP Delivery
-echo "==> [Gateway Entrypoint] Instrumenting WhatsApp engine adapters (Baileys & WhatsApp-WebJS) for instant QR caching..."
+# 5b. Instrument Engine Adapters to Cache Realtime QR in /tmp and Optimize Baileys Network Settings
+echo "==> [Gateway Entrypoint] Instrumenting WhatsApp engine adapters (Baileys & WhatsApp-WebJS)..."
+export NODE_OPTIONS="--dns-result-order=ipv4first"
+
 node -e '
 const fs = require("fs");
 const path = require("path");
@@ -80,6 +82,12 @@ function patchFile(filePath) {
 
   let modified = false;
 
+  // Ensure DNS IPv4 first is set at module load
+  if (!content.includes("dns.setDefaultResultOrder")) {
+    content = `try { require("dns").setDefaultResultOrder("ipv4first"); } catch(e){}\n` + content;
+    modified = true;
+  }
+
   // 1. WhatsApp Web.js adapter pattern
   const wwebPattern = /this\.client\.on\s*\(\s*[\x27\x22]qr[\x27\x22]\s*,\s*\(?\s*(\w+)\s*\)?\s*=>\s*\{/g;
   if (wwebPattern.test(content)) {
@@ -89,12 +97,19 @@ function patchFile(filePath) {
     modified = true;
   }
 
-  // 2. Baileys adapter onQR pattern
-  const baileysPattern = /(this\.config\?\.onQR\?\(\s*(\w+)\s*\))/g;
-  if (baileysPattern.test(content)) {
-    content = content.replace(baileysPattern, (match, fullCall, paramName) => {
+  // 2. Baileys adapter onQR and QR caching pattern
+  const baileysOnQrPattern = /(this\.config\?\.onQR\?\(\s*(\w+)\s*\))/g;
+  if (baileysOnQrPattern.test(content)) {
+    content = content.replace(baileysOnQrPattern, (match, fullCall, paramName) => {
       return `(function(){ try { const fs=require("fs"); const pid=this.config&&this.config.profileId; if(pid && ${paramName}) { fs.writeFileSync("/tmp/qr-" + pid + ".txt", String(${paramName}).trim(), "utf8"); console.log("[Engine Patch] Wrote Baileys live QR to /tmp/qr-" + pid + ".txt"); } } catch(e){} return ${fullCall}; }).call(this)`;
     });
+    modified = true;
+  }
+
+  // 3. Baileys socket timeout and network patch
+  const timeoutPattern = /(connectTimeoutMs\s*:\s*)\d+/g;
+  if (timeoutPattern.test(content)) {
+    content = content.replace(timeoutPattern, "$1 60000");
     modified = true;
   }
 
