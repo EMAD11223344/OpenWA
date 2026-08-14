@@ -55,8 +55,13 @@ exec /usr/bin/chromium.real \
   --no-zygote \
   --single-process \
   --dns-result-order=ipv4first \
-  --disable-features=IsolateOrigins,site-per-process \
+  --disable-features=IsolateOrigins,site-per-process,VizDisplayCompositor \
+  --disable-background-timer-throttling \
+  --disable-backgrounding-occluded-windows \
+  --disable-renderer-backgrounding \
+  --disable-ipc-flooding-protection \
   --disable-web-security \
+  --ignore-certificate-errors \
   "$@"
 EOF
   chmod +x /usr/bin/chromium
@@ -70,11 +75,16 @@ export DEFAULT_ENGINE=whatsapp-web-js
 export CHROMIUM_PATH=/usr/bin/chromium
 export PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 export PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-export PUPPETEER_TIMEOUT=120000
-export NAVIGATION_TIMEOUT=120000
-export WHATSAPP_TIMEOUT=120000
-export QR_TIMEOUT=120000
-export PUPPETEER_ARGS="--no-sandbox,--disable-setuid-sandbox,--disable-dev-shm-usage,--disable-gpu,--no-first-run,--no-zygote,--single-process,--dns-result-order=ipv4first"
+export PUPPETEER_TIMEOUT=180000
+export NAVIGATION_TIMEOUT=180000
+export WHATSAPP_TIMEOUT=180000
+export QR_TIMEOUT=180000
+export PAGE_TIMEOUT=180000
+# Pin a known-good WhatsApp Web version so wwebjs fetches HTML from GitHub CDN
+# instead of navigating directly to web.whatsapp.com (avoids ERR_TIMED_OUT)
+export WWEBJS_WEB_VERSION="2.3000.1041881976-alpha"
+export WWEBJS_WEB_VERSION_URL="https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/{version}.html"
+export PUPPETEER_ARGS="--no-sandbox,--disable-setuid-sandbox,--disable-dev-shm-usage,--disable-gpu,--no-first-run,--no-zygote,--single-process,--dns-result-order=ipv4first,--disable-background-timer-throttling"
 export CHROMIUM_FLAGS="--no-sandbox --disable-setuid-sandbox --disable-dev-shm-usage --disable-gpu --no-first-run --no-zygote --single-process --dns-result-order=ipv4first"
 
 start_backend_watchdog() {

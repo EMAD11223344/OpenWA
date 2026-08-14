@@ -663,10 +663,15 @@
 
     // Authenticated API Fetch Helper
     async function apiFetch(url, options = {}) {
-      const headers = {
-        'Content-Type': 'application/json',
-        ...(options.headers || {})
-      };
+      const method = (options.method || 'GET').toUpperCase();
+      const hasBody = options.body !== undefined && options.body !== null;
+
+      const headers = { ...(options.headers || {}) };
+
+      // Only set Content-Type for requests with a body
+      if (hasBody) {
+        headers['Content-Type'] = 'application/json';
+      }
 
       if (authToken) {
         headers['Authorization'] = `Bearer ${authToken}`;
@@ -675,7 +680,7 @@
         headers['X-API-Key'] = currentApiKey;
       }
 
-      return fetch(url, { ...options, headers });
+      return fetch(url, { ...options, method, headers });
     }
 
     // Realtime WebSocket Handler
