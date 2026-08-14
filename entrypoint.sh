@@ -13,18 +13,27 @@ if command -v redis-server >/dev/null 2>&1; then
   fi
 fi
 
-# 2. Always map DATABASE_CONNECTION_URI to DATABASE_URL if present
+# 2. Map DATABASE_CONNECTION_URI to DATABASE_URL if present
 if [ -n "$DATABASE_CONNECTION_URI" ]; then
   echo "==> [Gateway Entrypoint] Mapping DATABASE_CONNECTION_URI to DATABASE_URL..."
   export DATABASE_URL="$DATABASE_CONNECTION_URI"
 fi
 
-# 3. Synchronize Prisma Database Schema (Create missing tables)
+# 3. Synchronize Prisma Database Schema (Clean Wipe & Fresh Push)
 if [ -n "$DATABASE_URL" ]; then
-  echo "==> [Gateway Entrypoint] Synchronizing database tables with Prisma schema..."
-  cd /app 2>/dev/null || true
-  npx prisma db push --schema=packages/database/prisma/schema.prisma --accept-data-loss || \
-  npx prisma db push --schema=prisma/schema.prisma --accept-data-loss || true
+  echo "==> [Gateway Entrypoint] Locating Prisma schema in container..."
+  SCHEMA_PATH=$(find /app -name "schema.prisma" 2>/dev/null | head -n 1)
+  if [ -z "$SCHEMA_PATH" ]; then
+    SCHEMA_PATH=$(find / -name "schema.prisma" 2>/dev/null | head -n 1)
+  fi
+  
+  echo "==> [Gateway Entrypoint] Using Prisma schema: $SCHEMA_PATH"
+  if [ -n "$SCHEMA_PATH" ]; then
+    echo "==> [Gateway Entrypoint] Performing database clean reset & schema deployment..."
+    npx prisma db push --force-reset --schema="$SCHEMA_PATH" --accept-data-loss || \
+    npx prisma db push --schema="$SCHEMA_PATH" --accept-data-loss || true
+    echo "==> [Gateway Entrypoint] Database schema push completed."
+  fi
 fi
 
 # 4. Start MultiWA Gateway API process
