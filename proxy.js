@@ -24,10 +24,11 @@ function getDashboardHtml() {
 }
 
 const server = http.createServer((req, res) => {
-  const url = req.url || '/';
+  const parsedUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+  const pathname = parsedUrl.pathname;
 
   // 1. Serve Dashboard on Root and /dashboard
-  if (url === '/' || url === '/dashboard' || url === '/admin') {
+  if (pathname === '/' || pathname === '/dashboard' || pathname === '/admin') {
     const html = getDashboardHtml();
     res.writeHead(200, {
       'Content-Type': 'text/html; charset=utf-8',
@@ -39,7 +40,7 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // 2. Proxy API and Swagger Documentation to MultiWA Backend
+  // 2. Proxy API, Socket.IO Polling, and Swagger to MultiWA Backend
   const proxyOptions = {
     hostname: TARGET_HOST,
     port: TARGET_PORT,
@@ -52,7 +53,6 @@ const server = http.createServer((req, res) => {
   };
 
   const proxyReq = http.request(proxyOptions, (proxyRes) => {
-    // Clone headers and remove frame restrictions for Hugging Face iframe
     const headers = { ...proxyRes.headers };
     delete headers['x-frame-options'];
     headers['access-control-allow-origin'] = '*';
@@ -66,7 +66,7 @@ const server = http.createServer((req, res) => {
     console.error('Proxy connection error:', err.message);
     if (!res.headersSent) {
       res.writeHead(502, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'MultiWA Backend starting up, please refresh...', details: err.message }));
+      res.end(JSON.stringify({ error: 'MultiWA Backend initializing...', details: err.message }));
     }
   });
 
@@ -76,11 +76,13 @@ const server = http.createServer((req, res) => {
 // 3. WebSocket Upgrade Proxy for /socket.io/
 server.on('upgrade', (req, clientSocket, head) => {
   const targetSocket = net.connect(TARGET_PORT, TARGET_HOST, () => {
-    targetSocket.write(
-      `${req.method} ${req.url} HTTP/${req.httpVersion}\r\n` +
-      Object.entries(req.headers).map(([k, v]) => `${k}: ${v}`).join('\r\n') +
-      '\r\n\r\n'
-    );
+    let headerStr = `${req.method} ${req.url} HTTP/${req.httpVersion}\r\n`;
+    for (const [k, v] of Object.entries(req.headers)) {
+      headerStr += `${k}: ${v}\r\n`;
+    }
+    headerStr += '\r\n';
+
+    targetSocket.write(headerStr);
     if (head && head.length > 0) targetSocket.write(head);
     targetSocket.pipe(clientSocket);
     clientSocket.pipe(targetSocket);
@@ -95,5 +97,5 @@ server.on('upgrade', (req, clientSocket, head) => {
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 [MultiWA Gateway Proxy] Listening on http://0.0.0.0:${PORT}`);
-  console.log(`📡 [MultiWA Gateway Proxy] Forwarding API traffic to internal port ${TARGET_PORT}`);
+  console.log(`📡 [MultiWA Gateway Proxy] Forwarding API & WebSocket traffic to internal port ${TARGET_PORT}`);
 });

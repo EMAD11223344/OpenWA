@@ -14,6 +14,8 @@
   <script src="https://unpkg.com/lucide@latest"></script>
   <!-- QRCode.js -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <!-- Socket.IO Client -->
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script>
     tailwind.config = {
       darkMode: 'class',
@@ -400,11 +402,14 @@
       </div>
 
       <!-- QR Code Display Box -->
-      <div class="bg-white rounded-2xl p-6 flex flex-col items-center justify-center shadow-inner min-h-[260px] relative">
+      <div class="bg-white rounded-2xl p-6 flex flex-col items-center justify-center shadow-inner min-h-[280px] relative">
         <div id="qrcodeContainer" class="flex items-center justify-center"></div>
-        <div id="qrLoadingSpinner" class="absolute inset-0 bg-white/90 rounded-2xl flex flex-col items-center justify-center space-y-2">
-          <div class="w-8 h-8 border-3 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
-          <span class="text-xs font-semibold text-slate-700">Connecting Chromium Engine...</span>
+        <div id="qrLoadingSpinner" class="absolute inset-0 bg-white/95 rounded-2xl flex flex-col items-center justify-center space-y-3 p-6 text-center">
+          <div class="w-10 h-10 border-3 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
+          <div>
+            <p class="text-xs font-bold text-slate-800">Starting WhatsApp Engine...</p>
+            <p class="text-[11px] text-slate-500 mt-0.5">Connecting WebSocket & rendering QR</p>
+          </div>
         </div>
       </div>
 
@@ -412,11 +417,11 @@
       <div class="flex items-center justify-between text-xs text-slate-400 border-t border-white/10 pt-4">
         <div class="flex items-center space-x-2">
           <span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
-          <span id="qrStatusText">Awaiting scan...</span>
+          <span id="qrStatusText">Awaiting real-time QR stream...</span>
         </div>
         <button onclick="refreshQrCode()" class="flex items-center space-x-1 text-brand-400 hover:text-brand-300 font-medium">
           <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
-          <span>Refresh</span>
+          <span>Reconnect</span>
         </button>
       </div>
     </div>
@@ -484,7 +489,7 @@
     let currentApiKey = localStorage.getItem('mwa_api_key') || '';
     let currentWorkspaceId = '';
     let activeProfileId = '';
-    let qrPollTimer = null;
+    let socket = null;
 
     document.addEventListener('DOMContentLoaded', async () => {
       lucide.createIcons();
@@ -647,6 +652,10 @@
       localStorage.removeItem('mwa_api_key');
       authToken = '';
       currentApiKey = '';
+      if (socket) {
+        socket.disconnect();
+        socket = null;
+      }
       showLogin();
     }
 
@@ -667,11 +676,98 @@
       return fetch(url, { ...options, headers });
     }
 
+    // Realtime WebSocket Handler
+    function initSocket() {
+      if (socket && socket.connected) return;
+      
+      socket = io(window.location.origin, {
+        path: '/socket.io/',
+        transports: ['websocket', 'polling'],
+        reconnection: true,
+        auth: { token: authToken }
+      });
+
+      socket.on('connect', () => {
+        console.log('✅ Connected to Realtime WebSocket Gateway');
+        if (activeProfileId) {
+          socket.emit('subscribe:profile', { profileId: activeProfileId });
+          socket.emit('join', activeProfileId);
+        }
+      });
+
+      socket.on('qr:update', (data) => {
+        console.log('⚡ Received qr:update:', data);
+        handleIncomingQr(data);
+      });
+
+      socket.on('profile:qr', (data) => {
+        console.log('⚡ Received profile:qr:', data);
+        handleIncomingQr(data);
+      });
+
+      socket.on('qr', (data) => {
+        console.log('⚡ Received qr:', data);
+        handleIncomingQr(data);
+      });
+
+      socket.on('status:update', (data) => {
+        console.log('⚡ Status update:', data);
+        if (data.status === 'connected') onConnected();
+      });
+
+      socket.on('profile:status', (data) => {
+        console.log('⚡ Profile status:', data);
+        if (data.status === 'connected') onConnected();
+      });
+    }
+
+    function handleIncomingQr(data) {
+      const qrString = typeof data === 'string' ? data : (data.qr || data.qrCode || data.data?.qr || data.data?.qrCode);
+      if (!qrString) return;
+
+      const container = document.getElementById('qrcodeContainer');
+      const spinner = document.getElementById('qrLoadingSpinner');
+      const statusText = document.getElementById('qrStatusText');
+
+      spinner.classList.add('hidden');
+      statusText.innerText = 'Scan QR code with WhatsApp on your phone';
+      container.innerHTML = '';
+
+      if (qrString.startsWith('data:image')) {
+        container.innerHTML = `<img src="${qrString}" class="w-60 h-60 rounded-xl shadow-md border border-slate-100" />`;
+      } else {
+        new QRCode(container, {
+          text: qrString,
+          width: 240,
+          height: 240,
+          colorDark: "#000000",
+          colorLight: "#ffffff",
+          correctLevel: QRCode.CorrectLevel.M
+        });
+      }
+    }
+
+    function onConnected() {
+      const spinner = document.getElementById('qrLoadingSpinner');
+      const statusText = document.getElementById('qrStatusText');
+      statusText.innerText = 'Connected Successfully!';
+      spinner.classList.remove('hidden');
+      spinner.innerHTML = `
+        <div class="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 mx-auto">
+          <i data-lucide="check" class="w-7 h-7"></i>
+        </div>
+        <span class="text-sm font-bold text-emerald-700">WhatsApp Linked & Paired!</span>
+      `;
+      lucide.createIcons();
+      setTimeout(closeQrModal, 2000);
+    }
+
     async function initDashboard() {
       document.getElementById('loginScreen').classList.add('hidden');
       document.getElementById('dashboardApp').classList.remove('hidden');
       lucide.createIcons();
 
+      initSocket();
       await loadWorkspacesAndProfiles();
       await loadApiKeysList();
     }
@@ -782,77 +878,36 @@
       document.getElementById('qrModalSubtitle').innerText = `Session: ${profileName} — Scan with WhatsApp Linked Devices`;
       document.getElementById('qrModal').classList.remove('hidden');
       document.getElementById('qrLoadingSpinner').classList.remove('hidden');
+      document.getElementById('qrcodeContainer').innerHTML = '';
+
+      if (socket) {
+        socket.emit('subscribe:profile', { profileId: activeProfileId });
+        socket.emit('join', activeProfileId);
+      }
 
       try {
-        await apiFetch(`/api/v1/profiles/${profileId}/connect`, { method: 'POST' });
+        await apiFetch(`/api/v1/profiles/${profileId}/connect`, {
+          method: 'POST',
+          body: JSON.stringify({})
+        });
       } catch (e) {
         console.error('Connect trigger error:', e);
       }
-
-      startQrPolling();
     }
 
     function closeQrModal() {
       document.getElementById('qrModal').classList.add('hidden');
-      if (qrPollTimer) clearInterval(qrPollTimer);
       loadWorkspacesAndProfiles();
     }
 
-    function startQrPolling() {
-      if (qrPollTimer) clearInterval(qrPollTimer);
-      fetchStatusAndRenderQr();
-      qrPollTimer = setInterval(fetchStatusAndRenderQr, 3000);
-    }
-
-    async function fetchStatusAndRenderQr() {
-      if (!activeProfileId) return;
-
-      try {
-        const res = await apiFetch(`/api/v1/profiles/${activeProfileId}/status`);
-        const data = await res.json();
-        const container = document.getElementById('qrcodeContainer');
-        const spinner = document.getElementById('qrLoadingSpinner');
-        const statusText = document.getElementById('qrStatusText');
-
-        if (data.status === 'connected') {
-          statusText.innerText = 'Connected Successfully!';
-          spinner.classList.remove('hidden');
-          spinner.innerHTML = `
-            <div class="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600">
-              <i data-lucide="check" class="w-6 h-6"></i>
-            </div>
-            <span class="text-xs font-bold text-emerald-700">WhatsApp Paired!</span>
-          `;
-          lucide.createIcons();
-          setTimeout(closeQrModal, 2000);
-          return;
-        }
-
-        if (data.qrCode || data.qr) {
-          spinner.classList.add('hidden');
-          container.innerHTML = '';
-          const qrVal = data.qrCode || data.qr;
-          if (qrVal.startsWith('data:image')) {
-            container.innerHTML = `<img src="${qrVal}" class="w-56 h-56 rounded-lg shadow-sm" />`;
-          } else {
-            new QRCode(container, {
-              text: qrVal,
-              width: 220,
-              height: 220,
-              colorDark: "#000000",
-              colorLight: "#ffffff",
-              correctLevel: QRCode.CorrectLevel.M
-            });
-          }
-        }
-      } catch (e) {
-        console.error('Status fetch error:', e);
-      }
-    }
-
     function refreshQrCode() {
-      document.getElementById('qrLoadingSpinner').classList.remove('hidden');
-      fetchStatusAndRenderQr();
+      if (activeProfileId) {
+        document.getElementById('qrLoadingSpinner').classList.remove('hidden');
+        apiFetch(`/api/v1/profiles/${activeProfileId}/connect`, {
+          method: 'POST',
+          body: JSON.stringify({})
+        });
+      }
     }
 
     // CREATE PROFILE MODAL
@@ -895,7 +950,10 @@
     async function disconnectProfile(id) {
       if (!confirm('Are you sure you want to disconnect this session?')) return;
       try {
-        await apiFetch(`/api/v1/profiles/${id}/disconnect`, { method: 'POST' });
+        await apiFetch(`/api/v1/profiles/${id}/disconnect`, {
+          method: 'POST',
+          body: JSON.stringify({})
+        });
         await loadWorkspacesAndProfiles();
       } catch (e) {
         console.error('Disconnect error:', e);
