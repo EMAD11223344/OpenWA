@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-# Start embedded Redis server in background for queue management
+# 1. Start embedded Redis daemon for BullMQ
 echo "==> [Gateway Entrypoint] Starting embedded Redis daemon..."
 if command -v redis-server >/dev/null 2>&1; then
   redis-server --bind 127.0.0.1 --port 6379 --daemonize yes || echo "WARNING: Redis background start failed"
@@ -13,12 +13,28 @@ if command -v redis-server >/dev/null 2>&1; then
   fi
 fi
 
-# Run Prisma schema migrations if DATABASE_URL is configured
-if [ -n "$DATABASE_URL" ]; then
-  echo "==> [Gateway Entrypoint] Applying database schema migrations..."
-  npx prisma migrate deploy || true
+# 2. Map DATABASE_CONNECTION_URI to DATABASE_URL if needed
+if [ -z "$DATABASE_URL" ] && [ -n "$DATABASE_CONNECTION_URI" ]; then
+  echo "==> [Gateway Entrypoint] Mapping DATABASE_CONNECTION_URI to DATABASE_URL..."
+  export DATABASE_URL="$DATABASE_CONNECTION_URI"
 fi
 
-# Hand over to primary process
-echo "==> [Gateway Entrypoint] Starting API Engine Gateway..."
-exec "$@"
+# 3. Start MultiWA Gateway API process
+echo "==> [Gateway Entrypoint] Starting Multi-Adapter API Gateway..."
+
+if [ -f "/docker/entrypoint-api.sh" ]; then
+  exec /docker/entrypoint-api.sh "$@"
+elif [ -f "/app/docker/entrypoint-api.sh" ]; then
+  exec /app/docker/entrypoint-api.sh "$@"
+else
+  cd /app 2>/dev/null || true
+  if [ -f "apps/api/dist/main.js" ]; then
+    exec node apps/api/dist/main.js
+  elif [ -f "dist/apps/api/main.js" ]; then
+    exec node dist/apps/api/main.js
+  elif [ -f "dist/main.js" ]; then
+    exec node dist/main.js
+  else
+    exec npm run start:prod || exec pnpm start
+  fi
+fi

@@ -23,23 +23,16 @@ ENV CHROMIUM_PATH=/usr/bin/chromium
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
-# Security & Encryption Defaults
+# Security Secrets
 ENV JWT_SECRET=c025199d816db2613ca48c1efaef8e61b69aa155a26067e9747d98fccf31d2b7
 ENV JWT_REFRESH_SECRET=c025199d816db2613ca48c1efaef8e61b69aa155a26067e9747d98fccf31d2b7_refresh
 ENV ENCRYPTION_KEY=c025199d816db2613ca48c1efaef8e61b69aa155a26067e9747d98fccf31d2b7
 
-# Database Connection
-ENV DATABASE_URL=postgresql://postgres:postgres@aws-0-eu-central-1.pooler.supabase.com:5432/postgres?schema=public
+# Ensure storage directories exist
+RUN mkdir -p /data/sessions /app/sessions /app/storage /app/uploads && \
+    chmod -R 777 /data /app 2>/dev/null || true
 
-# Networking & DNS
-ENV NODE_OPTIONS="--dns-result-order=ipv4first"
-ENV CORS_ORIGINS=*
-
-# Ensure workspace and storage directories have full read/write permissions
-RUN mkdir -p /app/sessions /app/storage /app/uploads && \
-    chmod -R 777 /app/sessions /app/storage /app/uploads 2>/dev/null || true
-
-# Copy entrypoint script
+# Copy custom entrypoint wrapper
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
