@@ -106,11 +106,15 @@ function patchFile(filePath) {
     modified = true;
   }
 
-  // 3. Baileys socket timeout and network patch
-  const timeoutPattern = /(connectTimeoutMs\s*:\s*)\d+/g;
-  if (timeoutPattern.test(content)) {
-    content = content.replace(timeoutPattern, "$1 60000");
-    modified = true;
+  // 3. Baileys socket options patch (headers, timeout, browser identity)
+  if (filePath.includes("baileys.adapter.js")) {
+    const socketCallPattern = /(makeWASocket|default)\s*\(\s*\{/g;
+    if (socketCallPattern.test(content)) {
+      content = content.replace(socketCallPattern, (match) => {
+        return `${match}\n      connectTimeoutMs: 90000,\n      defaultQueryTimeoutMs: 90000,\n      keepAliveIntervalMs: 30000,\n      browser: ["Ubuntu", "Chrome", "130.0.6723.69"],\n      options: { headers: { "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36", "Origin": "https://web.whatsapp.com" } },`;
+      });
+      modified = true;
+    }
   }
 
   if (modified) {
