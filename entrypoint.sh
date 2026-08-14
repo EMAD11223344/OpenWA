@@ -37,28 +37,36 @@ if [ -n "$DATABASE_URL" ]; then
   fi
 fi
 
-# 4. Start MultiWA Gateway API on internal port 3333 in background
-echo "==> [Gateway Entrypoint] Starting MultiWA Backend on internal port 3333..."
+# 4. Start MultiWA Gateway API in resilient watchdog loop on internal port 3333
 export PORT=3333
 export API_PORT=3333
 export API_HOST=0.0.0.0
+export DEFAULT_ENGINE=whatsapp-web-js
+export CHROMIUM_PATH=/usr/bin/chromium
+export PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+export PUPPETEER_ARGS="--no-sandbox,--disable-setuid-sandbox,--disable-dev-shm-usage,--disable-gpu"
 
-if [ -f "/docker/entrypoint-api.sh" ]; then
-  /docker/entrypoint-api.sh "$@" &
-elif [ -f "/app/docker/entrypoint-api.sh" ]; then
-  /app/docker/entrypoint-api.sh "$@" &
-else
+start_backend_watchdog() {
   cd /app 2>/dev/null || true
-  if [ -f "apps/api/dist/main.js" ]; then
-    node apps/api/dist/main.js &
-  elif [ -f "dist/apps/api/main.js" ]; then
-    node dist/apps/api/main.js &
-  elif [ -f "dist/main.js" ]; then
-    node dist/main.js &
-  else
-    npm run start:prod &
-  fi
-fi
+  while true; do
+    echo "==> [Backend Watchdog] Launching MultiWA API Engine on port 3333..."
+    if [ -f "apps/api/dist/main.js" ]; then
+      node apps/api/dist/main.js || echo "==> [Backend Watchdog] Process exited ($?)."
+    elif [ -f "dist/apps/api/main.js" ]; then
+      node dist/apps/api/main.js || echo "==> [Backend Watchdog] Process exited ($?)."
+    elif [ -f "dist/main.js" ]; then
+      node dist/main.js || echo "==> [Backend Watchdog] Process exited ($?)."
+    elif [ -f "/docker/entrypoint-api.sh" ]; then
+      /docker/entrypoint-api.sh || echo "==> [Backend Watchdog] Process exited ($?)."
+    else
+      npm run start:prod || echo "==> [Backend Watchdog] Process exited ($?)."
+    fi
+    echo "==> [Backend Watchdog] Restarting backend in 2s..."
+    sleep 2
+  done
+}
+
+start_backend_watchdog &
 
 # 5. Start Gateway Proxy & Dashboard on Port 7860 in foreground
 echo "==> [Gateway Entrypoint] Starting MultiWA Dashboard & Gateway Proxy on port 7860..."
