@@ -1,7 +1,10 @@
 #!/bin/bash
 set -e
 
-# 1. Start embedded Redis daemon for BullMQ
+# 1. Clean up stale Chromium lockfiles
+rm -rf /tmp/.X* /tmp/puppeteer* /app/sessions/*/Singleton* /data/sessions/*/Singleton* 2>/dev/null || true
+
+# 2. Start embedded Redis daemon for BullMQ
 echo "==> [Gateway Entrypoint] Starting embedded Redis daemon..."
 if command -v redis-server >/dev/null 2>&1; then
   redis-server --bind 127.0.0.1 --port 6379 --daemonize yes || echo "WARNING: Redis background start failed"
@@ -13,14 +16,14 @@ if command -v redis-server >/dev/null 2>&1; then
   fi
 fi
 
-# 2. Map DATABASE_CONNECTION_URI to DATABASE_URL and DIRECT_URL
+# 3. Map DATABASE_CONNECTION_URI to DATABASE_URL and DIRECT_URL
 if [ -n "$DATABASE_CONNECTION_URI" ]; then
   echo "==> [Gateway Entrypoint] Mapping DATABASE_CONNECTION_URI to DATABASE_URL..."
   export DATABASE_URL="$DATABASE_CONNECTION_URI"
   export DIRECT_URL="$DATABASE_CONNECTION_URI"
 fi
 
-# 3. Synchronize Prisma Database Schema (Persistent Push)
+# 4. Synchronize Prisma Database Schema (Persistent Push)
 if [ -n "$DATABASE_URL" ]; then
   echo "==> [Gateway Entrypoint] Locating source Prisma schema in container..."
   SCHEMA_PATH=$(find /app -name "schema.prisma" 2>/dev/null | grep -v ".prisma/client" | head -n 1)
@@ -37,14 +40,15 @@ if [ -n "$DATABASE_URL" ]; then
   fi
 fi
 
-# 4. Start MultiWA Gateway API in resilient watchdog loop on internal port 3333
+# 5. Start MultiWA Gateway API in resilient watchdog loop on internal port 3333
 export PORT=3333
 export API_PORT=3333
 export API_HOST=0.0.0.0
 export DEFAULT_ENGINE=whatsapp-web-js
 export CHROMIUM_PATH=/usr/bin/chromium
 export PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
-export PUPPETEER_ARGS="--no-sandbox,--disable-setuid-sandbox,--disable-dev-shm-usage,--disable-gpu"
+export PUPPETEER_ARGS="--no-sandbox,--disable-setuid-sandbox,--disable-dev-shm-usage,--disable-gpu,--no-first-run,--no-zygote,--single-process,--disable-extensions,--disable-default-apps,--dns-result-order=ipv4first"
+export CHROMIUM_FLAGS="--no-sandbox --disable-setuid-sandbox --disable-dev-shm-usage --disable-gpu --no-first-run --no-zygote --single-process --dns-result-order=ipv4first"
 
 start_backend_watchdog() {
   cd /app 2>/dev/null || true
@@ -68,7 +72,7 @@ start_backend_watchdog() {
 
 start_backend_watchdog &
 
-# 5. Start Gateway Proxy & Dashboard on Port 7860 in foreground
+# 6. Start Gateway Proxy & Dashboard on Port 7860 in foreground
 echo "==> [Gateway Entrypoint] Starting MultiWA Dashboard & Gateway Proxy on port 7860..."
 export PORT=7860
 export TARGET_PORT=3333
