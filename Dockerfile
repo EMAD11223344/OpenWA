@@ -1,75 +1,49 @@
-FROM evoapicloud/evolution-api:v2.3.6
+# Multi-Channel Unified API Gateway
+FROM ribato/multiwa-api:latest
+
 USER root
 
-# ✅ Alpine: apk add (مش apt-get!)
-RUN apk add --no-cache redis postgresql postgresql-client bash
+# Install system dependencies (Redis for message queues, Chromium for real-browser adapter)
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends redis-server chromium bash curl && \
+    rm -rf /var/lib/apt/lists/*
 
-# ✅ Setup PostgreSQL embedded
-RUN mkdir -p /var/lib/postgresql/data /run/postgresql && \
-    chown -R postgres:postgres /var/lib/postgresql /run/postgresql && \
-    su - postgres -c "initdb -D /var/lib/postgresql/data --locale=C" && \
-    echo "host all all 127.0.0.1/32 trust" >> /var/lib/postgresql/data/pg_hba.conf
-
-# ✅ Create evolution DB and user
-RUN su - postgres -c "pg_ctl start -D /var/lib/postgresql/data -l /var/lib/postgresql/logfile" && \
-    sleep 3 && \
-    su - postgres -c "psql -c \"CREATE USER evolution WITH PASSWORD 'evolution_pass';\"" && \
-    su - postgres -c "psql -c \"CREATE DATABASE evolution OWNER evolution;\"" && \
-    su - postgres -c "psql -c \"GRANT ALL PRIVILEGES ON DATABASE evolution TO evolution;\"" && \
-    su - postgres -c "pg_ctl stop -D /var/lib/postgresql/data"
-
-# HF Spaces Port
-ENV SERVER_PORT=7860
+# Configure Hugging Face Spaces Port (7860)
 ENV PORT=7860
+ENV API_PORT=7860
+ENV API_HOST=0.0.0.0
 ENV NODE_ENV=production
 
-# Auth
-ENV AUTHENTICATION_TYPE=apikey
-ENV AUTHENTICATION_API_KEY=evolution_secret_key_7860
-ENV SERVER_URL=https://your-username-your-space.hf.space
-ENV AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES=true
+# Queue & Storage
+ENV REDIS_URL=redis://127.0.0.1:6379
 
-# Instance
-ENV DEL_INSTANCE=false
+# Engine Configuration
+ENV DEFAULT_ENGINE=whatsapp-web-js
+ENV CHROMIUM_PATH=/usr/bin/chromium
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
-# WebSocket & QR
-ENV WEBSOCKET_ENABLED=true
-ENV WEBSOCKET_GLOBAL_EVENTS=true
-ENV WEBSOCKET_ALLOWED_HOSTS=*
-ENV CONFIG_SESSION_PHONE_CLIENT="Chrome (Windows)"
-ENV CONFIG_SESSION_PHONE_NAME="Windows"
-ENV QRCODE_LIMIT=60
+# Security & Encryption Defaults
+ENV JWT_SECRET=c025199d816db2613ca48c1efaef8e61b69aa155a26067e9747d98fccf31d2b7
+ENV JWT_REFRESH_SECRET=c025199d816db2613ca48c1efaef8e61b69aa155a26067e9747d98fccf31d2b7_refresh
+ENV ENCRYPTION_KEY=c025199d816db2613ca48c1efaef8e61b69aa155a26067e9747d98fccf31d2b7
 
-# CORS
-ENV CORS_ORIGIN=*
-ENV CORS_METHODS=GET,POST,PUT,DELETE
-ENV CORS_CREDENTIALS=true
+# Database Connection
+ENV DATABASE_URL=postgresql://postgres:postgres@aws-0-eu-central-1.pooler.supabase.com:5432/postgres?schema=public
 
-# Cache (Embedded Redis)
-ENV CACHE_REDIS_ENABLED=true
-ENV CACHE_REDIS_URI=redis://127.0.0.1:6379/6
-ENV CACHE_REDIS_PREFIX_KEY=evolution
+# Networking & DNS
+ENV NODE_OPTIONS="--dns-result-order=ipv4first"
+ENV CORS_ORIGINS=*
 
-# ✅ Database MUST be true for v2!
-ENV DATABASE_ENABLED=true
-ENV DATABASE_PROVIDER=postgresql
-ENV DATABASE_CONNECTION_URI=postgresql://evolution:evolution_pass@127.0.0.1:5432/evolution?schema=public
+# Ensure workspace and storage directories have full read/write permissions
+RUN mkdir -p /app/sessions /app/storage /app/uploads && \
+    chmod -R 777 /app/sessions /app/storage /app/uploads 2>/dev/null || true
 
-# Logging
-ENV LOG_LEVEL=INFO
-ENV LOG_COLOR=true
+# Copy entrypoint script
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
 
-# Network
-ENV NODE_OPTIONS="--dns-result-order=ipv4first --network-family-autoselection-attempt-timeout=500"
-
-# ✅ Correct paths: /evolution/ (مش /app/)
-RUN mkdir -p /evolution/instances /evolution/store /evolution/public && \
-    chmod -R 777 /evolution/instances /evolution/store /evolution/public
-
-# ✅ Copy entrypoint to /evolution/ (مش /app/)
-COPY entrypoint.sh /evolution/entrypoint.sh
-RUN chmod +x /evolution/entrypoint.sh
-
+# Expose HF Spaces default port
 EXPOSE 7860
 
-ENTRYPOINT ["/evolution/entrypoint.sh"]
+ENTRYPOINT ["/app/entrypoint.sh"]

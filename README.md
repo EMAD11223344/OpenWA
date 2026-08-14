@@ -10,48 +10,46 @@ pinned: false
 
 # API Engine Server - Event Router & Messaging Gateway
 
-An open-source multi-channel event gateway deployed on **Hugging Face Spaces** (`myarenaosx/openwa`) and mirrored via **GitHub** (`EMAD11223344/OpenWA`).
+An open-source multi-channel messaging gateway deployed on **Hugging Face Spaces** (`myarenaosx/openwa`) and mirrored via **GitHub** (`EMAD11223344/OpenWA`).
 
 ---
 
 ## 🚀 Features
 
-- **Multi-Device Gateway**: Manage multi-device session instances, send text, media, audio, buttons, list messages, and polls.
+- **Multi-Adapter Gateway**: Manage multi-device session profiles with dual-engine browser and socket adapters.
 - **Docker Ready**: Pre-configured for Hugging Face Docker SDK listening on port `7860`.
 - **Auto Sync**: Automatic deployment pipeline from GitHub `main` branch to Hugging Face Hub.
-- **Webhooks & Events**: Real-time webhook event triggers for message status, connections, QR codes, and chat updates.
+- **Webhooks & Queues**: BullMQ distributed queue management with real-time WebSocket events.
 
 ---
 
 ## 🔑 Environment Configuration
 
-Default environment variables are pre-configured in the `Dockerfile` so the Space starts cleanly out of the box without requiring a database (`DATABASE_ENABLED=false`).
+Default environment variables are pre-configured in the `Dockerfile`:
 
-If you wish to use PostgreSQL persistence, add these variables/secrets in your **Hugging Face Space Settings -> Variables and Secrets**:
-
-| Variable | Description | Recommended Value |
+| Variable | Description | Default / Recommended |
 |---|---|---|
-| `SERVER_PORT` | HTTP Listening Port | `7860` |
-| `AUTHENTICATION_API_KEY` | Global API Key for header auth (`apikey`) | `your-custom-api-key` |
-| `SERVER_URL` | Public URL of your deployed Space | `https://myarenaosx-openwa.hf.space` |
-| `DATABASE_ENABLED` | Enable DB persistence | `false` (default) or `true` |
-| `DATABASE_PROVIDER` | Database engine (`postgresql` or `mysql`) | `postgresql` |
-| `DATABASE_CONNECTION_URI` | PostgreSQL Connection String | `postgresql://user:pass@host:5432/dbname` |
-| `LOG_LEVEL` | Logging detail (`ERROR`, `WARN`, `INFO`, `DEBUG`) | `INFO` |
+| `PORT` / `API_PORT` | HTTP Listening Port | `7860` |
+| `API_HOST` | Host Binding | `0.0.0.0` |
+| `REDIS_URL` | Redis Queue Broker URL | `redis://127.0.0.1:6379` |
+| `DATABASE_URL` | PostgreSQL Prisma URI | `postgresql://user:pass@host:5432/dbname` |
+| `DEFAULT_ENGINE` | Connection Engine Adapter | `whatsapp-web-js` |
+| `JWT_SECRET` | Authentication Secret | Configured via Secrets |
+| `ENCRYPTION_KEY` | Settings Encryption Key (32-bytes hex) | Configured via Secrets |
 
 ---
 
 ## 📡 API Endpoints Summary
 
-All requests require the `apikey` header matching `AUTHENTICATION_API_KEY`.
+Interactive Swagger API documentation is available at `/api/docs`.
 
-### 1. Instance Management
-- `POST /instance/create` - Create a new instance.
-- `GET /instance/fetchInstances` - List all active instances.
-- `GET /instance/connect/{instance_name}` - Get QR code or connection state.
-- `DELETE /instance/logout/{instance_name}` - Log out an instance.
+### 1. Session Management
+- `POST /api/v1/sessions` - Create a new session profile.
+- `GET /api/v1/sessions` - List all active sessions.
+- `GET /api/v1/sessions/:id/qr` - Retrieve QR code pairing payload.
+- `DELETE /api/v1/sessions/:id` - Terminate / log out session.
 
 ### 2. Messaging
-- `POST /message/sendText/{instance_name}` - Send text message.
-- `POST /message/sendMedia/{instance_name}` - Send image/video/document.
-- `POST /message/sendWhatsAppAudio/{instance_name}` - Send voice note (PTT).
+- `POST /api/v1/messages/text` - Send text message.
+- `POST /api/v1/messages/media` - Send media/document message.
+- `POST /api/v1/messages/poll` - Send interactive poll.
