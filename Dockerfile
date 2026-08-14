@@ -11,7 +11,7 @@ RUN apt-get update && \
 
 # Configure Hugging Face Spaces Port (7860)
 ENV PORT=7860
-ENV API_PORT=7860
+ENV API_PORT=3333
 ENV API_HOST=0.0.0.0
 ENV NODE_ENV=production
 
@@ -29,9 +29,13 @@ ENV JWT_SECRET=c025199d816db2613ca48c1efaef8e61b69aa155a26067e9747d98fccf31d2b7
 ENV JWT_REFRESH_SECRET=c025199d816db2613ca48c1efaef8e61b69aa155a26067e9747d98fccf31d2b7_refresh
 ENV ENCRYPTION_KEY=c025199d816db2613ca48c1efaef8e61b69aa155a26067e9747d98fccf31d2b7
 
-# Ensure storage directories exist
-RUN mkdir -p /data/sessions /app/sessions /app/storage /app/uploads && \
+# Ensure storage and dashboard directories exist
+RUN mkdir -p /data/sessions /app/sessions /app/storage /app/uploads /app/dashboard && \
     chmod -R 777 /data /app 2>/dev/null || true
+
+# Copy dashboard SPA and gateway proxy
+COPY dashboard /app/dashboard
+COPY proxy.js /app/proxy.js
 
 # Copy custom entrypoint wrapper
 COPY entrypoint.sh /app/entrypoint.sh

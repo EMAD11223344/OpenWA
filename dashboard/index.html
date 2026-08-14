@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MultiWA — Unified WhatsApp Gateway Dashboard</title>
+  <!-- Google Fonts: Inter & Outfit -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- QRCode.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            heading: ['Outfit', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            brand: {
+              50: '#ecfdf5',
+              100: '#d1fae5',
+              400: '#34d399',
+              500: '#10b981',
+              600: '#059669',
+              700: '#047857',
+            },
+            dark: {
+              800: '#131722',
+              850: '#0f1219',
+              900: '#0b0d13',
+              950: '#07080c',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    h1, h2, h3, h4, .brand-font { font-family: 'Outfit', sans-serif; }
+    .glass-card {
+      background: rgba(19, 23, 34, 0.75);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+    }
+    .glass-card-hover:hover {
+      border-color: rgba(16, 185, 129, 0.3);
+      box-shadow: 0 8px 30px rgba(16, 185, 129, 0.08);
+    }
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0b0d13; }
+    ::-webkit-scrollbar-thumb { background: #232a3b; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #10b981; }
+  </style>
+</head>
+<body class="bg-dark-900 text-slate-200 min-h-screen flex flex-col antialiased selection:bg-brand-500 selection:text-white">
+
+  <!-- TOP HEADER -->
+  <header class="h-16 border-b border-white/10 bg-dark-950/80 backdrop-blur-md sticky top-0 z-40 px-6 flex items-center justify-between">
+    <div class="flex items-center space-x-4">
+      <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-500 to-emerald-700 flex items-center justify-center shadow-lg shadow-brand-500/20">
+        <i data-lucide="message-square-more" class="w-6 h-6 text-white"></i>
+      </div>
+      <div>
+        <div class="flex items-center space-x-2">
+          <span class="font-heading font-extrabold text-lg tracking-tight text-white">Multi<span class="text-brand-400">WA</span></span>
+          <span class="text-[10px] px-2 py-0.5 rounded-full bg-brand-500/10 text-brand-400 border border-brand-500/20 font-medium">Gateway v3.0</span>
+        </div>
+        <p class="text-xs text-slate-400">Enterprise Multi-Device Gateway</p>
+      </div>
+    </div>
+
+    <!-- Right Controls -->
+    <div class="flex items-center space-x-4">
+      <div id="connectionBadge" class="flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span>Gateway Online</span>
+      </div>
+
+      <a href="/api/docs" target="_blank" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 text-xs font-medium transition">
+        <i data-lucide="book-open" class="w-4 h-4 text-brand-400"></i>
+        <span>Swagger Docs</span>
+      </a>
+
+      <div class="border-l border-white/10 pl-4 flex items-center space-x-3">
+        <div class="text-right hidden sm:block">
+          <p id="userEmailDisplay" class="text-xs font-medium text-white">admin@openwa.local</p>
+          <p class="text-[10px] text-brand-400">Super Administrator</p>
+        </div>
+        <button onclick="showApiKeyModal()" class="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-300 transition" title="API Keys">
+          <i data-lucide="key" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN CONTAINER -->
+  <div class="flex-1 flex max-w-7xl w-full mx-auto p-6 gap-6">
+
+    <!-- SIDEBAR NAV -->
+    <aside class="w-64 flex-shrink-0 flex flex-col space-y-2">
+      <button onclick="switchTab('sessions')" id="tabBtn-sessions" class="tab-btn w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition bg-brand-500/10 text-brand-400 border border-brand-500/20">
+        <i data-lucide="smartphone" class="w-5 h-5"></i>
+        <span>WhatsApp Profiles</span>
+      </button>
+
+      <button onclick="switchTab('tester')" id="tabBtn-tester" class="tab-btn w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition text-slate-400 hover:text-white hover:bg-white/5">
+        <i data-lucide="send" class="w-5 h-5"></i>
+        <span>Message Sandbox</span>
+      </button>
+
+      <button onclick="switchTab('keys')" id="tabBtn-keys" class="tab-btn w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition text-slate-400 hover:text-white hover:bg-white/5">
+        <i data-lucide="shield-check" class="w-5 h-5"></i>
+        <span>API & Webhooks</span>
+      </button>
+
+      <button onclick="switchTab('system')" id="tabBtn-system" class="tab-btn w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition text-slate-400 hover:text-white hover:bg-white/5">
+        <i data-lucide="server" class="w-5 h-5"></i>
+        <span>System Diagnostics</span>
+      </button>
+
+      <!-- Quick Metrics Widget -->
+      <div class="mt-auto glass-card rounded-2xl p-4 border border-white/5 space-y-3">
+        <div class="flex items-center justify-between text-xs text-slate-400">
+          <span>Engine Status</span>
+          <span class="text-brand-400 font-semibold">Dual Chromium</span>
+        </div>
+        <div class="flex items-center justify-between text-xs text-slate-400">
+          <span>Queue Broker</span>
+          <span class="text-emerald-400 font-semibold">Redis BullMQ</span>
+        </div>
+        <div class="flex items-center justify-between text-xs text-slate-400">
+          <span>Database</span>
+          <span class="text-emerald-400 font-semibold">PostgreSQL Sync</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- CONTENT PANELS -->
+    <main class="flex-1 space-y-6">
+
+      <!-- TAB 1: SESSIONS / PROFILES -->
+      <section id="tabContent-sessions" class="tab-content space-y-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-2xl font-bold text-white tracking-tight font-heading">WhatsApp Profiles</h2>
+            <p class="text-xs text-slate-400 mt-1">Manage multi-device WhatsApp accounts with dual Chromium & Baileys engines</p>
+          </div>
+          <button onclick="showCreateModal()" class="flex items-center space-x-2 px-4 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold shadow-lg shadow-brand-500/25 transition">
+            <i data-lucide="plus-circle" class="w-4 h-4"></i>
+            <span>Create New Profile</span>
+          </button>
+        </div>
+
+        <!-- Profiles Grid -->
+        <div id="profilesGrid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <!-- Populated by JS -->
+          <div class="glass-card rounded-2xl p-6 flex flex-col items-center justify-center space-y-3 border-dashed border-white/10 text-center py-12">
+            <div class="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center text-slate-400 animate-spin">
+              <i data-lucide="loader-2" class="w-6 h-6"></i>
+            </div>
+            <p class="text-sm text-slate-400">Loading active profiles...</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 2: MESSAGE SANDBOX -->
+      <section id="tabContent-tester" class="tab-content hidden space-y-6">
+        <div>
+          <h2 class="text-2xl font-bold text-white tracking-tight font-heading">Message Sandbox</h2>
+          <p class="text-xs text-slate-400 mt-1">Test live WhatsApp text and media delivery directly through the API</p>
+        </div>
+
+        <div class="glass-card rounded-2xl p-6 space-y-6">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Sender Profile</label>
+              <select id="msgSenderProfile" class="w-full bg-dark-950 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500">
+                <!-- Populated dynamically -->
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Recipient Phone Number</label>
+              <input type="text" id="msgRecipientPhone" placeholder="e.g. 201012345678 (include country code)" class="w-full bg-dark-950 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500">
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Message Body</label>
+            <textarea id="msgBody" rows="4" placeholder="Type your test message here..." class="w-full bg-dark-950 border border-white/10 rounded-xl p-4 text-sm text-white focus:outline-none focus:border-brand-500"></textarea>
+          </div>
+
+          <div class="flex items-center justify-between pt-2">
+            <div id="msgStatusIndicator" class="text-xs text-slate-400">Ready to dispatch</div>
+            <button onclick="sendTestMessage()" id="btnSendMsg" class="flex items-center space-x-2 px-6 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold shadow-lg shadow-brand-500/25 transition">
+              <i data-lucide="send" class="w-4 h-4"></i>
+              <span>Send Message</span>
+            </button>
+          </div>
+
+          <!-- Response Log Box -->
+          <div id="msgResponseBox" class="hidden rounded-xl bg-dark-950 p-4 border border-white/10 text-xs font-mono text-slate-300 space-y-1">
+            <div class="flex items-center justify-between border-b border-white/10 pb-2 mb-2 text-slate-400">
+              <span>API Dispatch Response</span>
+              <span id="msgResponseStatus" class="font-bold text-brand-400">200 OK</span>
+            </div>
+            <pre id="msgResponseJson" class="overflow-x-auto"></pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 3: API KEYS & WEBHOOKS -->
+      <section id="tabContent-keys" class="tab-content hidden space-y-6">
+        <div>
+          <h2 class="text-2xl font-bold text-white tracking-tight font-heading">API Keys & Authentication</h2>
+          <p class="text-xs text-slate-400 mt-1">Manage API authorization tokens for Business-OS and external automations</p>
+        </div>
+
+        <div class="glass-card rounded-2xl p-6 space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="text-sm font-semibold text-white">Active Master API Key</h3>
+            <button onclick="copyMasterApiKey()" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-brand-500/10 text-brand-400 hover:bg-brand-500/20 text-xs font-semibold transition">
+              <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+              <span id="copyKeyText">Copy Key</span>
+            </button>
+          </div>
+          <div class="bg-dark-950 border border-white/10 rounded-xl p-3 text-xs font-mono text-brand-400 select-all overflow-x-auto" id="masterApiKeyDisplay">
+            mwa_88df9fcebe4fd2495bd7285cfa11c4e7f93147ae8170dca6be970b25c9ed3617
+          </div>
+          <p class="text-xs text-slate-400">Pass this key in HTTP headers as <code class="text-slate-200 bg-white/5 px-1.5 py-0.5 rounded">X-API-Key: mwa_...</code> when connecting from Business-OS backend.</p>
+        </div>
+      </section>
+
+      <!-- TAB 4: SYSTEM DIAGNOSTICS -->
+      <section id="tabContent-system" class="tab-content hidden space-y-6">
+        <div>
+          <h2 class="text-2xl font-bold text-white tracking-tight font-heading">System Diagnostics</h2>
+          <p class="text-xs text-slate-400 mt-1">Live health checks, daemon status, and performance metrics</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="glass-card rounded-2xl p-5 space-y-2">
+            <div class="flex items-center justify-between text-xs text-slate-400">
+              <span>Fastify API Port</span>
+              <i data-lucide="activity" class="w-4 h-4 text-brand-400"></i>
+            </div>
+            <p class="text-2xl font-extrabold text-white font-heading">7860</p>
+            <p class="text-xs text-emerald-400">HTTP & WebSockets Active</p>
+          </div>
+
+          <div class="glass-card rounded-2xl p-5 space-y-2">
+            <div class="flex items-center justify-between text-xs text-slate-400">
+              <span>Embedded Redis</span>
+              <i data-lucide="database" class="w-4 h-4 text-emerald-400"></i>
+            </div>
+            <p class="text-2xl font-extrabold text-white font-heading">127.0.0.1:6379</p>
+            <p class="text-xs text-emerald-400">BullMQ Connected</p>
+          </div>
+
+          <div class="glass-card rounded-2xl p-5 space-y-2">
+            <div class="flex items-center justify-between text-xs text-slate-400">
+              <span>Database Sync</span>
+              <i data-lucide="layers" class="w-4 h-4 text-emerald-400"></i>
+            </div>
+            <p class="text-2xl font-extrabold text-white font-heading">PostgreSQL</p>
+            <p class="text-xs text-emerald-400">Prisma Migrated Clean</p>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- QR CODE MODAL -->
+  <div id="qrModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="glass-card bg-dark-900 border border-white/10 rounded-3xl max-w-md w-full p-6 space-y-6 shadow-2xl relative">
+      <button onclick="closeQrModal()" class="absolute top-5 right-5 text-slate-400 hover:text-white transition">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+
+      <div class="text-center space-y-1">
+        <h3 class="text-xl font-bold text-white font-heading">Scan WhatsApp QR Code</h3>
+        <p class="text-xs text-slate-400" id="qrModalSubtitle">Open WhatsApp on your phone -> Linked Devices -> Link a Device</p>
+      </div>
+
+      <!-- QR Code Display Box -->
+      <div class="bg-white rounded-2xl p-6 flex flex-col items-center justify-center shadow-inner min-h-[260px] relative">
+        <div id="qrcodeContainer" class="flex items-center justify-center"></div>
+        <div id="qrLoadingSpinner" class="absolute inset-0 bg-white/90 rounded-2xl flex flex-col items-center justify-center space-y-2">
+          <div class="w-8 h-8 border-3 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
+          <span class="text-xs font-semibold text-slate-700">Connecting Chromium Engine...</span>
+        </div>
+      </div>
+
+      <!-- Status Timer -->
+      <div class="flex items-center justify-between text-xs text-slate-400 border-t border-white/10 pt-4">
+        <div class="flex items-center space-x-2">
+          <span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
+          <span id="qrStatusText">Awaiting scan...</span>
+        </div>
+        <button onclick="refreshQrCode()" class="flex items-center space-x-1 text-brand-400 hover:text-brand-300 font-medium">
+          <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+          <span>Refresh</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CREATE PROFILE MODAL -->
+  <div id="createModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="glass-card bg-dark-900 border border-white/10 rounded-3xl max-w-md w-full p-6 space-y-5 shadow-2xl relative">
+      <button onclick="closeCreateModal()" class="absolute top-5 right-5 text-slate-400 hover:text-white transition">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+
+      <div class="space-y-1">
+        <h3 class="text-xl font-bold text-white font-heading">Create WhatsApp Profile</h3>
+        <p class="text-xs text-slate-400">Initialize a new session instance for messaging</p>
+      </div>
+
+      <div class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Profile / Session Name</label>
+          <input type="text" id="newProfileName" placeholder="e.g. support-line-1" class="w-full bg-dark-950 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Engine Architecture</label>
+          <select id="newProfileEngine" class="w-full bg-dark-950 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500">
+            <option value="whatsapp-web-js" selected>Chromium Real Browser (whatsapp-web-js - Recommended)</option>
+            <option value="baileys">Baileys WebSocket Adapter (baileys)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-end space-x-3 pt-3">
+        <button onclick="closeCreateModal()" class="px-4 py-2 rounded-xl text-slate-400 hover:text-white text-xs font-semibold">Cancel</button>
+        <button onclick="submitCreateProfile()" class="px-5 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-xs font-semibold shadow-lg shadow-brand-500/25 transition">Create & Launch</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- JAVASCRIPT LOGIC -->
+  <script>
+    // State
+    let authToken = '';
+    let currentWorkspaceId = '';
+    let activeProfileId = '';
+    let qrPollTimer = null;
+    const MASTER_API_KEY = 'mwa_88df9fcebe4fd2495bd7285cfa11c4e7f93147ae8170dca6be970b25c9ed3617';
+
+    // Initialize App
+    document.addEventListener('DOMContentLoaded', async () => {
+      lucide.createIcons();
+      await authenticateAdmin();
+      await loadWorkspacesAndProfiles();
+    });
+
+    async function authenticateAdmin() {
+      try {
+        const res = await fetch('/api/v1/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: 'admin@openwa.local', password: 'Password123!' })
+        });
+        const json = await res.json();
+        authToken = json.accessToken || json.data?.accessToken;
+      } catch (e) {
+        console.error('Auth error:', e);
+      }
+    }
+
+    async function loadWorkspacesAndProfiles() {
+      if (!authToken) await authenticateAdmin();
+
+      try {
+        const wsRes = await fetch('/api/v1/workspaces', {
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        const wsJson = await wsRes.json();
+        currentWorkspaceId = wsJson[0]?.id || wsJson.data?.[0]?.id;
+
+        // Fetch Profiles
+        const profRes = await fetch('/api/v1/profiles', {
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        const profJson = await profRes.json();
+        const profiles = Array.isArray(profJson) ? profJson : (profJson.data || []);
+
+        renderProfiles(profiles);
+        populateSenderDropdown(profiles);
+      } catch (e) {
+        console.error('Load profiles error:', e);
+      }
+    }
+
+    function renderProfiles(profiles) {
+      const grid = document.getElementById('profilesGrid');
+      if (!profiles || profiles.length === 0) {
+        grid.innerHTML = `
+          <div class="glass-card rounded-2xl p-6 col-span-full flex flex-col items-center justify-center space-y-3 py-12 text-center">
+            <i data-lucide="smartphone-nfc" class="w-10 h-10 text-slate-500"></i>
+            <p class="text-sm text-slate-300 font-semibold">No WhatsApp profiles created yet</p>
+            <button onclick="showCreateModal()" class="text-xs text-brand-400 font-medium hover:underline">Click here to create your first session</button>
+          </div>
+        `;
+        lucide.createIcons();
+        return;
+      }
+
+      grid.innerHTML = profiles.map(p => {
+        const isConnected = p.status === 'connected';
+        const isConnecting = p.status === 'connecting';
+        const statusBg = isConnected ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : (isConnecting ? 'bg-amber-500/10 text-amber-400 border-amber-500/20 animate-pulse' : 'bg-slate-500/10 text-slate-400 border-slate-500/20');
+        const statusText = isConnected ? 'Connected & Synced' : (isConnecting ? 'Connecting / QR Ready' : 'Disconnected');
+
+        return `
+          <div class="glass-card glass-card-hover rounded-2xl p-5 flex flex-col justify-between space-y-4 transition">
+            <div class="flex items-start justify-between">
+              <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-brand-400">
+                  <i data-lucide="smartphone" class="w-5 h-5"></i>
+                </div>
+                <div>
+                  <h4 class="font-bold text-white text-base">${p.displayName || p.name}</h4>
+                  <span class="text-[11px] text-slate-400 font-mono">${p.engine || 'whatsapp-web-js'}</span>
+                </div>
+              </div>
+              <span class="px-2.5 py-1 rounded-full text-[10px] font-semibold border ${statusBg}">
+                ${statusText}
+              </span>
+            </div>
+
+            <div class="pt-3 border-t border-white/5 flex items-center justify-between">
+              <span class="text-xs text-slate-400 font-mono">${p.phoneNumber || 'Not Paired'}</span>
+              <div class="flex items-center space-x-2">
+                ${isConnected ? `
+                  <button onclick="disconnectProfile('${p.id}')" class="px-3 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs font-semibold transition">
+                    Disconnect
+                  </button>
+                ` : `
+                  <button onclick="openQrModal('${p.id}', '${p.displayName || p.name}')" class="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-xs font-semibold shadow-md shadow-brand-500/20 transition">
+                    <i data-lucide="qr-code" class="w-3.5 h-3.5"></i>
+                    <span>Connect QR</span>
+                  </button>
+                `}
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+      lucide.createIcons();
+    }
+
+    function populateSenderDropdown(profiles) {
+      const select = document.getElementById('msgSenderProfile');
+      select.innerHTML = profiles.map(p => `<option value="${p.id}">${p.displayName || p.name} (${p.status})</option>`).join('');
+    }
+
+    // TAB SWITCHING
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+      document.querySelectorAll('.tab-btn').forEach(el => {
+        el.classList.remove('bg-brand-500/10', 'text-brand-400', 'border', 'border-brand-500/20');
+        el.classList.add('text-slate-400');
+      });
+
+      document.getElementById(`tabContent-${tabId}`).classList.remove('hidden');
+      const activeBtn = document.getElementById(`tabBtn-${tabId}`);
+      activeBtn.classList.remove('text-slate-400');
+      activeBtn.classList.add('bg-brand-500/10', 'text-brand-400', 'border', 'border-brand-500/20');
+      lucide.createIcons();
+    }
+
+    // QR MODAL LOGIC
+    async function openQrModal(profileId, profileName) {
+      activeProfileId = profileId;
+      document.getElementById('qrModalSubtitle').innerText = `Session: ${profileName} — Scan with WhatsApp Linked Devices`;
+      document.getElementById('qrModal').classList.remove('hidden');
+      document.getElementById('qrLoadingSpinner').classList.remove('hidden');
+
+      // Trigger Connect
+      try {
+        await fetch(`/api/v1/profiles/${profileId}/connect`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+      } catch (e) {
+        console.error('Connect trigger error:', e);
+      }
+
+      startQrPolling();
+    }
+
+    function closeQrModal() {
+      document.getElementById('qrModal').classList.add('hidden');
+      if (qrPollTimer) clearInterval(qrPollTimer);
+      loadWorkspacesAndProfiles();
+    }
+
+    function startQrPolling() {
+      if (qrPollTimer) clearInterval(qrPollTimer);
+      fetchStatusAndRenderQr();
+      qrPollTimer = setInterval(fetchStatusAndRenderQr, 3000);
+    }
+
+    async function fetchStatusAndRenderQr() {
+      if (!activeProfileId) return;
+
+      try {
+        const res = await fetch(`/api/v1/profiles/${activeProfileId}/status`, {
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        const data = await res.json();
+        const container = document.getElementById('qrcodeContainer');
+        const spinner = document.getElementById('qrLoadingSpinner');
+        const statusText = document.getElementById('qrStatusText');
+
+        if (data.status === 'connected') {
+          statusText.innerText = 'Connected Successfully!';
+          spinner.classList.remove('hidden');
+          spinner.innerHTML = `
+            <div class="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600">
+              <i data-lucide="check" class="w-6 h-6"></i>
+            </div>
+            <span class="text-xs font-bold text-emerald-700">WhatsApp Paired!</span>
+          `;
+          lucide.createIcons();
+          setTimeout(closeQrModal, 2000);
+          return;
+        }
+
+        if (data.qrCode || data.qr) {
+          spinner.classList.add('hidden');
+          container.innerHTML = '';
+          const qrVal = data.qrCode || data.qr;
+          if (qrVal.startsWith('data:image')) {
+            container.innerHTML = `<img src="${qrVal}" class="w-56 h-56 rounded-lg shadow-sm" />`;
+          } else {
+            new QRCode(container, {
+              text: qrVal,
+              width: 220,
+              height: 220,
+              colorDark: "#000000",
+              colorLight: "#ffffff",
+              correctLevel: QRCode.CorrectLevel.M
+            });
+          }
+        }
+      } catch (e) {
+        console.error('Status fetch error:', e);
+      }
+    }
+
+    function refreshQrCode() {
+      document.getElementById('qrLoadingSpinner').classList.remove('hidden');
+      fetchStatusAndRenderQr();
+    }
+
+    // CREATE PROFILE MODAL
+    function showCreateModal() {
+      document.getElementById('createModal').classList.remove('hidden');
+    }
+
+    function closeCreateModal() {
+      document.getElementById('createModal').classList.add('hidden');
+    }
+
+    async function submitCreateProfile() {
+      const name = document.getElementById('newProfileName').value.trim();
+      const engine = document.getElementById('newProfileEngine').value;
+      if (!name) return alert('Please enter a profile name');
+
+      try {
+        const res = await fetch('/api/v1/profiles', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authToken}`
+          },
+          body: JSON.stringify({
+            name: name,
+            engine: engine,
+            workspaceId: currentWorkspaceId
+          })
+        });
+
+        if (res.ok) {
+          closeCreateModal();
+          document.getElementById('newProfileName').value = '';
+          await loadWorkspacesAndProfiles();
+        } else {
+          const err = await res.json();
+          alert(err.message || 'Failed to create profile');
+        }
+      } catch (e) {
+        alert('Creation error: ' + e.message);
+      }
+    }
+
+    async function disconnectProfile(id) {
+      if (!confirm('Are you sure you want to disconnect this session?')) return;
+      try {
+        await fetch(`/api/v1/profiles/${id}/disconnect`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        await loadWorkspacesAndProfiles();
+      } catch (e) {
+        console.error('Disconnect error:', e);
+      }
+    }
+
+    // MESSAGE SANDBOX SENDER
+    async function sendTestMessage() {
+      const profileId = document.getElementById('msgSenderProfile').value;
+      const phone = document.getElementById('msgRecipientPhone').value.trim();
+      const message = document.getElementById('msgBody').value.trim();
+
+      if (!phone || !message) return alert('Please enter recipient phone and message text.');
+
+      const indicator = document.getElementById('msgStatusIndicator');
+      const btn = document.getElementById('btnSendMsg');
+      const responseBox = document.getElementById('msgResponseBox');
+      const responseStatus = document.getElementById('msgResponseStatus');
+      const responseJson = document.getElementById('msgResponseJson');
+
+      indicator.innerText = 'Dispatching message...';
+      btn.disabled = true;
+
+      try {
+        const res = await fetch('/api/v1/messages/text', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-API-Key': MASTER_API_KEY
+          },
+          body: JSON.stringify({
+            profileId: profileId,
+            phone: phone,
+            message: message
+          })
+        });
+
+        const json = await res.json();
+        responseBox.classList.remove('hidden');
+        responseStatus.innerText = `${res.status} ${res.statusText}`;
+        responseJson.innerText = JSON.stringify(json, null, 2);
+        indicator.innerText = res.ok ? 'Dispatched successfully!' : 'Dispatch failed';
+      } catch (e) {
+        indicator.innerText = 'Error: ' + e.message;
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    function copyMasterApiKey() {
+      navigator.clipboard.writeText(MASTER_API_KEY);
+      const text = document.getElementById('copyKeyText');
+      text.innerText = 'Copied!';
+      setTimeout(() => text.innerText = 'Copy Key', 2000);
+    }
+  </script>
+</body>
+</html>

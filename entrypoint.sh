@@ -38,22 +38,33 @@ if [ -n "$DATABASE_URL" ]; then
   fi
 fi
 
-# 4. Start MultiWA Gateway API process
-echo "==> [Gateway Entrypoint] Starting Multi-Adapter API Gateway..."
+# 4. Start MultiWA Gateway API on internal port 3333 in background
+echo "==> [Gateway Entrypoint] Starting MultiWA Backend on internal port 3333..."
+export PORT=3333
+export API_PORT=3333
+export API_HOST=0.0.0.0
 
 if [ -f "/docker/entrypoint-api.sh" ]; then
-  exec /docker/entrypoint-api.sh "$@"
+  /docker/entrypoint-api.sh "$@" &
 elif [ -f "/app/docker/entrypoint-api.sh" ]; then
-  exec /app/docker/entrypoint-api.sh "$@"
+  /app/docker/entrypoint-api.sh "$@" &
 else
   cd /app 2>/dev/null || true
   if [ -f "apps/api/dist/main.js" ]; then
-    exec node apps/api/dist/main.js
+    node apps/api/dist/main.js &
   elif [ -f "dist/apps/api/main.js" ]; then
-    exec node dist/apps/api/main.js
+    node dist/apps/api/main.js &
   elif [ -f "dist/main.js" ]; then
-    exec node dist/main.js
+    node dist/main.js &
   else
-    exec npm run start:prod || exec pnpm start
+    npm run start:prod &
   fi
 fi
+
+# 5. Start Gateway Proxy & Dashboard on Port 7860 in foreground
+echo "==> [Gateway Entrypoint] Starting MultiWA Dashboard & Gateway Proxy on port 7860..."
+export PORT=7860
+export TARGET_PORT=3333
+
+sleep 2
+exec node /app/proxy.js
