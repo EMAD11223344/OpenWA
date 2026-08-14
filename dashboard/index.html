@@ -407,8 +407,8 @@
         <div id="qrLoadingSpinner" class="absolute inset-0 bg-white/95 rounded-2xl flex flex-col items-center justify-center space-y-3 p-6 text-center">
           <div class="w-10 h-10 border-3 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
           <div>
-            <p class="text-xs font-bold text-slate-800">Starting WhatsApp Chromium Engine...</p>
-            <p class="text-[11px] text-slate-500 mt-0.5">Connecting WebSocket stream & generating QR</p>
+            <p class="text-xs font-bold text-slate-800" id="qrSpinnerTitle">Starting Chromium Engine...</p>
+            <p class="text-[11px] text-slate-500 mt-0.5" id="qrSpinnerSubtitle">Generating real-time QR code</p>
           </div>
         </div>
       </div>
@@ -417,7 +417,7 @@
       <div class="flex items-center justify-between text-xs text-slate-400 border-t border-white/10 pt-4">
         <div class="flex items-center space-x-2">
           <span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
-          <span id="qrStatusText">Connecting engine stream...</span>
+          <span id="qrStatusText">Awaiting QR stream...</span>
         </div>
         <button onclick="refreshQrCode()" class="flex items-center space-x-1 text-brand-400 hover:text-brand-300 font-medium">
           <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
@@ -488,9 +488,10 @@
     let authToken = localStorage.getItem('mwa_token') || '';
     let currentApiKey = localStorage.getItem('mwa_api_key') || '';
     let currentWorkspaceId = '';
+    let currentAccountId = '';
     let activeProfileId = '';
     let socket = null;
-    let pollTimer = null;
+    let qrPollTimer = null;
 
     document.addEventListener('DOMContentLoaded', async () => {
       lucide.createIcons();
@@ -689,37 +690,37 @@
       });
 
       socket.on('connect', () => {
-        console.log('✅ Connected to Realtime WebSocket Gateway');
+        console.log('✅ Realtime WebSocket Connected');
         if (activeProfileId) {
-          socket.emit('subscribe:profile', { profileId: activeProfileId });
-          socket.emit('join', activeProfileId);
+          joinProfileRoom(activeProfileId);
         }
       });
 
-      socket.on('qr:update', (data) => {
-        console.log('⚡ Received qr:update:', data);
-        handleIncomingQr(data);
-      });
+      // Catch-all handler for any real-time event
+      socket.onAny((event, ...args) => {
+        console.log('⚡ Socket event received:', event, args);
+        const data = args[0];
+        if (!data) return;
 
-      socket.on('profile:qr', (data) => {
-        console.log('⚡ Received profile:qr:', data);
-        handleIncomingQr(data);
-      });
+        // Check for QR payloads
+        if (event.includes('qr') || data.qr || data.qrCode || data.code) {
+          handleIncomingQr(data);
+        }
 
-      socket.on('qr', (data) => {
-        console.log('⚡ Received qr:', data);
-        handleIncomingQr(data);
+        // Check for connection status payloads
+        if (data.status === 'connected' || event.includes('connected')) {
+          onConnected();
+        }
       });
+    }
 
-      socket.on('status:update', (data) => {
-        console.log('⚡ Status update:', data);
-        if (data.status === 'connected') onConnected();
-      });
-
-      socket.on('profile:status', (data) => {
-        console.log('⚡ Profile status:', data);
-        if (data.status === 'connected') onConnected();
-      });
+    function joinProfileRoom(id) {
+      if (!socket) return;
+      socket.emit('subscribe:profile', { profileId: id });
+      socket.emit('subscribe', { profileId: id });
+      socket.emit('join', id);
+      socket.emit('join', { profileId: id });
+      socket.emit('join:profile', id);
     }
 
     function handleIncomingQr(data) {
@@ -785,6 +786,13 @@
         if (wsRes.ok) {
           const wsJson = await wsRes.json();
           currentWorkspaceId = wsJson[0]?.id || wsJson.data?.[0]?.id;
+        }
+
+        const acctRes = await apiFetch('/api/v1/accounts');
+        if (acctRes.ok) {
+          const acctJson = await acctRes.json();
+          const accts = Array.isArray(acctJson) ? acctJson : (acctJson.data || []);
+          currentAccountId = accts[0]?.id || '';
         }
 
         const profRes = await apiFetch('/api/v1/profiles');
@@ -879,62 +887,95 @@
       lucide.createIcons();
     }
 
-    // QR MODAL LOGIC
+    // OFFICIAL QR MODAL & POLLING LOGIC
     async function openQrModal(profileId, profileName) {
       activeProfileId = profileId;
       document.getElementById('qrModalSubtitle').innerText = `Session: ${profileName} — Scan with WhatsApp Linked Devices`;
       document.getElementById('qrModal').classList.remove('hidden');
       document.getElementById('qrLoadingSpinner').classList.remove('hidden');
       document.getElementById('qrcodeContainer').innerHTML = '';
-      document.getElementById('qrStatusText').innerText = 'Initializing Chromium browser...';
+      document.getElementById('qrStatusText').innerText = 'Starting Chromium Engine...';
 
-      if (socket) {
-        socket.emit('subscribe:profile', { profileId: activeProfileId });
-        socket.emit('join', activeProfileId);
-      }
+      // Subscribe WebSocket rooms
+      joinProfileRoom(activeProfileId);
 
+      // 1. Connect Profile Trigger
       try {
-        await apiFetch(`/api/v1/profiles/${profileId}/connect`, {
-          method: 'POST',
-          body: JSON.stringify({})
-        });
+        if (currentAccountId) {
+          await apiFetch(`/api/v1/accounts/${currentAccountId}/profiles/${profileId}/connect`, {
+            method: 'POST',
+            body: JSON.stringify({})
+          });
+        } else {
+          await apiFetch(`/api/v1/profiles/${profileId}/connect`, {
+            method: 'POST',
+            body: JSON.stringify({})
+          });
+        }
       } catch (e) {
         console.error('Connect trigger error:', e);
       }
 
-      startStatusPolling();
+      // 2. Start Polling the Official QR & Status Endpoints
+      startOfficialQrPolling();
     }
 
     function closeQrModal() {
       document.getElementById('qrModal').classList.add('hidden');
-      if (pollTimer) clearInterval(pollTimer);
+      if (qrPollTimer) clearInterval(qrPollTimer);
       loadWorkspacesAndProfiles();
     }
 
-    function startStatusPolling() {
-      if (pollTimer) clearInterval(pollTimer);
-      pollTimer = setInterval(async () => {
+    function startOfficialQrPolling() {
+      if (qrPollTimer) clearInterval(qrPollTimer);
+      
+      const pollFunction = async () => {
         if (!activeProfileId) return;
+        
         try {
-          const res = await apiFetch(`/api/v1/profiles/${activeProfileId}/status`);
-          if (res.ok) {
-            const data = await res.json();
-            if (data.status === 'connected') {
+          // A. Fetch from official Account Profile QR endpoint
+          if (currentAccountId) {
+            const qrRes = await apiFetch(`/api/v1/accounts/${currentAccountId}/profiles/${activeProfileId}/qr`);
+            if (qrRes.ok) {
+              const qrData = await qrRes.json();
+              if (qrData.qr) {
+                handleIncomingQr(qrData.qr);
+              }
+            }
+          }
+
+          // B. Check Profile status for connected
+          const statusRes = await apiFetch(`/api/v1/profiles/${activeProfileId}/status`);
+          if (statusRes.ok) {
+            const sData = await statusRes.json();
+            if (sData.status === 'connected') {
               onConnected();
             }
           }
-        } catch (e) {}
-      }, 2500);
+        } catch (e) {
+          console.error('QR Poll error:', e);
+        }
+      };
+
+      pollFunction();
+      qrPollTimer = setInterval(pollFunction, 2000);
     }
 
     function refreshQrCode() {
       if (activeProfileId) {
         document.getElementById('qrLoadingSpinner').classList.remove('hidden');
         document.getElementById('qrcodeContainer').innerHTML = '';
-        apiFetch(`/api/v1/profiles/${activeProfileId}/connect`, {
-          method: 'POST',
-          body: JSON.stringify({})
-        });
+        if (currentAccountId) {
+          apiFetch(`/api/v1/accounts/${currentAccountId}/profiles/${activeProfileId}/connect`, {
+            method: 'POST',
+            body: JSON.stringify({})
+          });
+        } else {
+          apiFetch(`/api/v1/profiles/${activeProfileId}/connect`, {
+            method: 'POST',
+            body: JSON.stringify({})
+          });
+        }
       }
     }
 
