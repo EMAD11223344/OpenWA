@@ -999,6 +999,18 @@
         }
         
         try {
+          // 0. High-Speed Live Gateway QR Check
+          try {
+            const r = await fetch(`/api/qr-live/${activeProfileId}`);
+            if (r.ok) {
+              const d = await r.json();
+              const qrVal = extractQrString(d);
+              if (qrVal) {
+                handleIncomingQr(qrVal);
+              }
+            }
+          } catch(e){}
+
           // 1. Official Account-scoped QR endpoint
           if (currentAccountId) {
             try {

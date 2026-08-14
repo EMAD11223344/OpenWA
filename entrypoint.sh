@@ -67,6 +67,59 @@ EOF
   chmod +x /usr/bin/chromium
 fi
 
+# 5b. Instrument Engine Adapter to Cache Realtime QR in /tmp for Instant HTTP Delivery
+echo "==> [Gateway Entrypoint] Instrumenting WhatsApp WebJS engine for instant QR caching..."
+node -e '
+const fs = require("fs");
+const path = require("path");
+
+function patchFile(filePath) {
+  if (!fs.existsSync(filePath)) return false;
+  let content = fs.readFileSync(filePath, "utf8");
+  if (content.includes("/tmp/qr-")) return false;
+
+  const targetPattern = /this\.client\.on\s*\(\s*[\x27\x22]qr[\x27\x22]\s*,\s*\(?\s*(\w+)\s*\)?\s*=>\s*\{/g;
+  if (targetPattern.test(content)) {
+    content = content.replace(targetPattern, (match, paramName) => {
+      return `${match}\n      try { const fs=require("fs"); const pid=this.config&&this.config.profileId; if(pid && ${paramName}) { fs.writeFileSync("/tmp/qr-" + pid + ".txt", String(${paramName}).trim(), "utf8"); console.log("[Engine Patch] Wrote live QR to /tmp/qr-" + pid + ".txt"); } } catch(e){}`;
+    });
+    fs.writeFileSync(filePath, content, "utf8");
+    console.log("[Engine Patch] Successfully instrumented:", filePath);
+    return true;
+  }
+  return false;
+}
+
+try {
+  const searchDirs = ["/app/packages/engines/dist", "/app/dist", "/app/node_modules"];
+  let patched = 0;
+  for (const dir of searchDirs) {
+    if (!fs.existsSync(dir)) continue;
+    const findFiles = (d) => {
+      let results = [];
+      const list = fs.readdirSync(d);
+      for (const item of list) {
+        const full = path.join(d, item);
+        const stat = fs.statSync(full);
+        if (stat && stat.isDirectory() && !full.includes(".git") && !full.includes(".pnpm")) {
+          results = results.concat(findFiles(full));
+        } else if (full.endsWith("whatsapp-webjs.adapter.js")) {
+          results.push(full);
+        }
+      }
+      return results;
+    };
+    const adapterFiles = findFiles(dir);
+    for (const f of adapterFiles) {
+      if (patchFile(f)) patched++;
+    }
+  }
+  console.log("[Engine Patch] Total adapter files instrumented:", patched);
+} catch(err) {
+  console.log("[Engine Patch] Notice:", err.message);
+}
+' || echo "Engine instrumentation notice: continuing..."
+
 # 6. Start MultiWA Gateway API in resilient watchdog loop on internal port 3333
 export PORT=3333
 export API_PORT=3333

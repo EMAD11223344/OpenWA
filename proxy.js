@@ -40,6 +40,47 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // 1b. Direct Realtime QR endpoint
+  if (pathname.startsWith('/api/qr-live/') || pathname.startsWith('/api/qr-raw/')) {
+    const profileId = pathname.split('/').pop();
+    const qrFile = `/tmp/qr-${profileId}.txt`;
+    if (fs.existsSync(qrFile)) {
+      const qrData = fs.readFileSync(qrFile, 'utf8').trim();
+      if (qrData) {
+        res.writeHead(200, {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        });
+        res.end(JSON.stringify({ qr: qrData, status: 'pairing', success: true }));
+        return;
+      }
+    }
+    res.writeHead(200, {
+      'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': '*'
+    });
+    res.end(JSON.stringify({ qr: null, status: 'pending', success: false }));
+    return;
+  }
+
+  // 1c. Intercept Official Account QR endpoint if live QR is cached
+  const qrMatch = pathname.match(/\/api\/v1\/accounts\/[^/]+\/profiles\/([^/]+)\/qr/);
+  if (qrMatch && req.method === 'GET') {
+    const profileId = qrMatch[1];
+    const qrFile = `/tmp/qr-${profileId}.txt`;
+    if (fs.existsSync(qrFile)) {
+      const qrData = fs.readFileSync(qrFile, 'utf8').trim();
+      if (qrData) {
+        res.writeHead(200, {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        });
+        res.end(JSON.stringify({ qr: qrData, status: 'pairing', success: true }));
+        return;
+      }
+    }
+  }
+
   // 2. Proxy API, Socket.IO Polling, and Swagger to MultiWA Backend
   const proxyOptions = {
     hostname: TARGET_HOST,
