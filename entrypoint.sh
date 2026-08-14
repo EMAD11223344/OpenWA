@@ -20,7 +20,7 @@ if [ -n "$DATABASE_CONNECTION_URI" ]; then
   export DIRECT_URL="$DATABASE_CONNECTION_URI"
 fi
 
-# 3. Synchronize Prisma Database Schema with explicit --url flag
+# 3. Synchronize Prisma Database Schema (Persistent Push)
 if [ -n "$DATABASE_URL" ]; then
   echo "==> [Gateway Entrypoint] Locating source Prisma schema in container..."
   SCHEMA_PATH=$(find /app -name "schema.prisma" 2>/dev/null | grep -v ".prisma/client" | head -n 1)
@@ -30,10 +30,9 @@ if [ -n "$DATABASE_URL" ]; then
   
   echo "==> [Gateway Entrypoint] Using Prisma schema: $SCHEMA_PATH"
   if [ -n "$SCHEMA_PATH" ]; then
-    echo "==> [Gateway Entrypoint] Performing database clean reset & schema deployment..."
-    prisma db push --url "$DATABASE_URL" --force-reset --schema="$SCHEMA_PATH" --accept-data-loss || \
-    npx --yes prisma db push --url "$DATABASE_URL" --force-reset --schema="$SCHEMA_PATH" --accept-data-loss || \
-    prisma db push --force-reset --schema="$SCHEMA_PATH" --accept-data-loss || true
+    echo "==> [Gateway Entrypoint] Synchronizing database schema tables..."
+    prisma db push --url "$DATABASE_URL" --schema="$SCHEMA_PATH" --accept-data-loss || \
+    npx --yes prisma db push --url "$DATABASE_URL" --schema="$SCHEMA_PATH" --accept-data-loss || true
     echo "==> [Gateway Entrypoint] Database schema push completed."
   fi
 fi

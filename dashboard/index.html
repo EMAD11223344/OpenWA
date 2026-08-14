@@ -65,7 +65,7 @@
 <body class="bg-dark-900 text-slate-200 min-h-screen flex flex-col antialiased selection:bg-brand-500 selection:text-white">
 
   <!-- ========================================== -->
-  <!-- 1. LOGIN SCREEN (Shown if NOT authenticated) -->
+  <!-- 1. LOGIN & REGISTER SCREEN -->
   <!-- ========================================== -->
   <div id="loginScreen" class="fixed inset-0 bg-dark-950/95 backdrop-blur-md z-50 flex items-center justify-center p-4">
     <div class="glass-card max-w-md w-full p-8 rounded-3xl space-y-6 shadow-2xl border border-white/10 relative">
@@ -76,24 +76,27 @@
         </div>
         <div>
           <h1 class="font-heading font-extrabold text-2xl text-white tracking-tight">Multi<span class="text-brand-400">WA</span> Gateway</h1>
-          <p class="text-xs text-slate-400 mt-1">Authenticate to access the management console</p>
+          <p class="text-xs text-slate-400 mt-1" id="authSubtitle">Sign in to access your WhatsApp console</p>
         </div>
       </div>
 
       <!-- Auth Toggle Tabs -->
       <div class="flex p-1 bg-dark-900 rounded-xl border border-white/5">
-        <button type="button" onclick="setAuthMode('credentials')" id="authTab-cred" class="flex-1 py-2 text-xs font-semibold rounded-lg bg-brand-500 text-white transition">
-          Email / Password
+        <button type="button" onclick="setAuthMode('login')" id="authTab-login" class="flex-1 py-2 text-xs font-semibold rounded-lg bg-brand-500 text-white transition">
+          Sign In
+        </button>
+        <button type="button" onclick="setAuthMode('register')" id="authTab-register" class="flex-1 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition">
+          New Account
         </button>
         <button type="button" onclick="setAuthMode('apikey')" id="authTab-key" class="flex-1 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition">
           API Key
         </button>
       </div>
 
-      <!-- Form 1: Email / Password -->
+      <!-- Form 1: Sign In -->
       <form id="credLoginForm" onsubmit="handleCredLogin(event)" class="space-y-4">
         <div>
-          <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Admin Email</label>
+          <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Email Address</label>
           <input type="email" id="loginEmail" required placeholder="admin@openwa.local" value="admin@openwa.local" class="w-full bg-dark-950 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500">
         </div>
 
@@ -102,7 +105,12 @@
           <input type="password" id="loginPassword" required placeholder="••••••••" value="Password123!" class="w-full bg-dark-950 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500">
         </div>
 
-        <div id="loginErrorMsg" class="hidden p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-medium text-center"></div>
+        <div id="loginErrorMsg" class="hidden p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-medium text-center space-y-2">
+          <p id="loginErrorText"></p>
+          <button type="button" onclick="quickRegisterAdmin()" class="px-3 py-1 bg-brand-500 text-white text-[11px] font-bold rounded-lg hover:bg-brand-600 transition">
+            Initialize Default Admin Account
+          </button>
+        </div>
 
         <button type="submit" id="btnLoginSubmit" class="w-full py-3 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-sm font-bold shadow-lg shadow-brand-500/25 transition flex items-center justify-center space-x-2">
           <span>Sign In to Dashboard</span>
@@ -110,7 +118,37 @@
         </button>
       </form>
 
-      <!-- Form 2: API Key Direct Login -->
+      <!-- Form 2: Register New Account -->
+      <form id="regForm" onsubmit="handleRegister(event)" class="space-y-4 hidden">
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Full Name</label>
+          <input type="text" id="regName" required placeholder="Admin User" value="Admin" class="w-full bg-dark-950 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Organization / Workspace Name</label>
+          <input type="text" id="regOrg" required placeholder="OpenWA Corp" value="OpenWA Organization" class="w-full bg-dark-950 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Email Address</label>
+          <input type="email" id="regEmail" required placeholder="admin@openwa.local" value="admin@openwa.local" class="w-full bg-dark-950 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Password</label>
+          <input type="password" id="regPassword" required placeholder="Password123!" value="Password123!" class="w-full bg-dark-950 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500">
+        </div>
+
+        <div id="regErrorMsg" class="hidden p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-medium text-center"></div>
+
+        <button type="submit" id="btnRegSubmit" class="w-full py-3 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-sm font-bold shadow-lg shadow-brand-500/25 transition flex items-center justify-center space-x-2">
+          <span>Create Account & Log In</span>
+          <i data-lucide="user-plus" class="w-4 h-4"></i>
+        </button>
+      </form>
+
+      <!-- Form 3: API Key Direct Login -->
       <form id="apiKeyLoginForm" onsubmit="handleApiKeyLogin(event)" class="space-y-4 hidden">
         <div>
           <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Master API Key</label>
@@ -167,8 +205,8 @@
 
         <div class="border-l border-white/10 pl-4 flex items-center space-x-3">
           <div class="text-right hidden sm:block">
-            <p id="userEmailDisplay" class="text-xs font-medium text-white">Authenticated</p>
-            <p class="text-[10px] text-brand-400 font-mono" id="userRoleDisplay">Admin</p>
+            <p id="userEmailDisplay" class="text-xs font-medium text-white">admin@openwa.local</p>
+            <p class="text-[10px] text-brand-400 font-mono" id="userRoleDisplay">Administrator</p>
           </div>
           <button onclick="showApiKeyModal()" class="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-300 transition" title="API Keys">
             <i data-lucide="key" class="w-4 h-4"></i>
@@ -458,17 +496,18 @@
     });
 
     function setAuthMode(mode) {
-      if (mode === 'credentials') {
-        document.getElementById('authTab-cred').className = 'flex-1 py-2 text-xs font-semibold rounded-lg bg-brand-500 text-white transition';
-        document.getElementById('authTab-key').className = 'flex-1 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition';
-        document.getElementById('credLoginForm').classList.remove('hidden');
-        document.getElementById('apiKeyLoginForm').classList.add('hidden');
-      } else {
-        document.getElementById('authTab-key').className = 'flex-1 py-2 text-xs font-semibold rounded-lg bg-brand-500 text-white transition';
-        document.getElementById('authTab-cred').className = 'flex-1 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition';
-        document.getElementById('apiKeyLoginForm').classList.remove('hidden');
-        document.getElementById('credLoginForm').classList.add('hidden');
-      }
+      document.getElementById('authTab-login').className = mode === 'login' ? 'flex-1 py-2 text-xs font-semibold rounded-lg bg-brand-500 text-white transition' : 'flex-1 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition';
+      document.getElementById('authTab-register').className = mode === 'register' ? 'flex-1 py-2 text-xs font-semibold rounded-lg bg-brand-500 text-white transition' : 'flex-1 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition';
+      document.getElementById('authTab-key').className = mode === 'apikey' ? 'flex-1 py-2 text-xs font-semibold rounded-lg bg-brand-500 text-white transition' : 'flex-1 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition';
+
+      document.getElementById('credLoginForm').classList.toggle('hidden', mode !== 'login');
+      document.getElementById('regForm').classList.toggle('hidden', mode !== 'register');
+      document.getElementById('apiKeyLoginForm').classList.toggle('hidden', mode !== 'apikey');
+
+      const subtitle = document.getElementById('authSubtitle');
+      if (mode === 'login') subtitle.innerText = 'Sign in to access your WhatsApp console';
+      if (mode === 'register') subtitle.innerText = 'Create a fresh Administrator account';
+      if (mode === 'apikey') subtitle.innerText = 'Authenticate using your Master API key';
     }
 
     function showLogin() {
@@ -482,6 +521,7 @@
       const email = document.getElementById('loginEmail').value.trim();
       const password = document.getElementById('loginPassword').value.trim();
       const errBox = document.getElementById('loginErrorMsg');
+      const errText = document.getElementById('loginErrorText');
       const btn = document.getElementById('btnLoginSubmit');
 
       errBox.classList.add('hidden');
@@ -502,11 +542,76 @@
           document.getElementById('userEmailDisplay').innerText = emailVal;
           await initDashboard();
         } else {
-          errBox.innerText = data.message || 'Invalid email or password';
+          errText.innerText = data.message || 'Invalid credentials';
           errBox.classList.remove('hidden');
         }
       } catch (err) {
-        errBox.innerText = 'Connection error: ' + err.message;
+        errText.innerText = 'Connection error: ' + err.message;
+        errBox.classList.remove('hidden');
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function quickRegisterAdmin() {
+      const email = document.getElementById('loginEmail').value.trim() || 'admin@openwa.local';
+      const password = document.getElementById('loginPassword').value.trim() || 'Password123!';
+      try {
+        const res = await fetch('/api/v1/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: email,
+            password: password,
+            name: 'Admin',
+            organizationName: 'OpenWA Organization'
+          })
+        });
+        const data = await res.json();
+        if (res.ok && (data.accessToken || data.data?.accessToken)) {
+          authToken = data.accessToken || data.data?.accessToken;
+          localStorage.setItem('mwa_token', authToken);
+          document.getElementById('userEmailDisplay').innerText = email;
+          await initDashboard();
+        } else {
+          alert('Registration: ' + (data.message || 'Account already exists. Please check password.'));
+        }
+      } catch (e) {
+        alert('Error: ' + e.message);
+      }
+    }
+
+    async function handleRegister(e) {
+      e.preventDefault();
+      const name = document.getElementById('regName').value.trim();
+      const org = document.getElementById('regOrg').value.trim();
+      const email = document.getElementById('regEmail').value.trim();
+      const password = document.getElementById('regPassword').value.trim();
+      const errBox = document.getElementById('regErrorMsg');
+      const btn = document.getElementById('btnRegSubmit');
+
+      errBox.classList.add('hidden');
+      btn.disabled = true;
+
+      try {
+        const res = await fetch('/api/v1/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, organizationName: org, email, password })
+        });
+
+        const data = await res.json();
+        if (res.ok && (data.accessToken || data.data?.accessToken)) {
+          authToken = data.accessToken || data.data?.accessToken;
+          localStorage.setItem('mwa_token', authToken);
+          document.getElementById('userEmailDisplay').innerText = email;
+          await initDashboard();
+        } else {
+          errBox.innerText = Array.isArray(data.message) ? data.message.join(', ') : (data.message || 'Registration failed');
+          errBox.classList.remove('hidden');
+        }
+      } catch (err) {
+        errBox.innerText = 'Error: ' + err.message;
         errBox.classList.remove('hidden');
       } finally {
         btn.disabled = false;
