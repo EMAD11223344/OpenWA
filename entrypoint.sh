@@ -67,8 +67,8 @@ EOF
   chmod +x /usr/bin/chromium
 fi
 
-# 5b. Instrument Engine Adapter to Cache Realtime QR in /tmp for Instant HTTP Delivery
-echo "==> [Gateway Entrypoint] Instrumenting WhatsApp WebJS engine for instant QR caching..."
+# 5b. Instrument Engine Adapters to Cache Realtime QR in /tmp for Instant HTTP Delivery
+echo "==> [Gateway Entrypoint] Instrumenting WhatsApp engine adapters (Baileys & WhatsApp-WebJS) for instant QR caching..."
 node -e '
 const fs = require("fs");
 const path = require("path");
@@ -78,11 +78,27 @@ function patchFile(filePath) {
   let content = fs.readFileSync(filePath, "utf8");
   if (content.includes("/tmp/qr-")) return false;
 
-  const targetPattern = /this\.client\.on\s*\(\s*[\x27\x22]qr[\x27\x22]\s*,\s*\(?\s*(\w+)\s*\)?\s*=>\s*\{/g;
-  if (targetPattern.test(content)) {
-    content = content.replace(targetPattern, (match, paramName) => {
-      return `${match}\n      try { const fs=require("fs"); const pid=this.config&&this.config.profileId; if(pid && ${paramName}) { fs.writeFileSync("/tmp/qr-" + pid + ".txt", String(${paramName}).trim(), "utf8"); console.log("[Engine Patch] Wrote live QR to /tmp/qr-" + pid + ".txt"); } } catch(e){}`;
+  let modified = false;
+
+  // 1. WhatsApp Web.js adapter pattern
+  const wwebPattern = /this\.client\.on\s*\(\s*[\x27\x22]qr[\x27\x22]\s*,\s*\(?\s*(\w+)\s*\)?\s*=>\s*\{/g;
+  if (wwebPattern.test(content)) {
+    content = content.replace(wwebPattern, (match, paramName) => {
+      return `${match}\n      try { const fs=require("fs"); const pid=this.config&&this.config.profileId; if(pid && ${paramName}) { fs.writeFileSync("/tmp/qr-" + pid + ".txt", String(${paramName}).trim(), "utf8"); console.log("[Engine Patch] Wrote WhatsApp-WebJS live QR to /tmp/qr-" + pid + ".txt"); } } catch(e){}`;
     });
+    modified = true;
+  }
+
+  // 2. Baileys adapter onQR pattern
+  const baileysPattern = /(this\.config\?\.onQR\?\(\s*(\w+)\s*\))/g;
+  if (baileysPattern.test(content)) {
+    content = content.replace(baileysPattern, (match, fullCall, paramName) => {
+      return `(function(){ try { const fs=require("fs"); const pid=this.config&&this.config.profileId; if(pid && ${paramName}) { fs.writeFileSync("/tmp/qr-" + pid + ".txt", String(${paramName}).trim(), "utf8"); console.log("[Engine Patch] Wrote Baileys live QR to /tmp/qr-" + pid + ".txt"); } } catch(e){} return ${fullCall}; }).call(this)`;
+    });
+    modified = true;
+  }
+
+  if (modified) {
     fs.writeFileSync(filePath, content, "utf8");
     console.log("[Engine Patch] Successfully instrumented:", filePath);
     return true;
@@ -103,7 +119,7 @@ try {
         const stat = fs.statSync(full);
         if (stat && stat.isDirectory() && !full.includes(".git") && !full.includes(".pnpm")) {
           results = results.concat(findFiles(full));
-        } else if (full.endsWith("whatsapp-webjs.adapter.js")) {
+        } else if (full.endsWith(".adapter.js")) {
           results.push(full);
         }
       }
