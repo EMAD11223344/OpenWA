@@ -3,9 +3,10 @@ FROM ribato/multiwa-api:latest
 
 USER root
 
-# Install system dependencies (Redis for message queues, Chromium for real-browser adapter)
+# Install system dependencies (Redis for message queues, Chromium for real-browser adapter, and Prisma CLI globally)
 RUN apt-get update && \
     apt-get install -y --no-install-recommends redis-server chromium bash curl && \
+    npm install -g prisma && \
     rm -rf /var/lib/apt/lists/*
 
 # Configure Hugging Face Spaces Port (7860)

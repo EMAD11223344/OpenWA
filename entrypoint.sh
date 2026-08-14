@@ -21,17 +21,18 @@ fi
 
 # 3. Synchronize Prisma Database Schema (Clean Wipe & Fresh Push)
 if [ -n "$DATABASE_URL" ]; then
-  echo "==> [Gateway Entrypoint] Locating Prisma schema in container..."
-  SCHEMA_PATH=$(find /app -name "schema.prisma" 2>/dev/null | head -n 1)
+  echo "==> [Gateway Entrypoint] Locating source Prisma schema in container..."
+  SCHEMA_PATH=$(find /app -name "schema.prisma" 2>/dev/null | grep -v ".prisma/client" | head -n 1)
   if [ -z "$SCHEMA_PATH" ]; then
-    SCHEMA_PATH=$(find / -name "schema.prisma" 2>/dev/null | head -n 1)
+    SCHEMA_PATH=$(find /app -name "schema.prisma" 2>/dev/null | head -n 1)
   fi
   
   echo "==> [Gateway Entrypoint] Using Prisma schema: $SCHEMA_PATH"
   if [ -n "$SCHEMA_PATH" ]; then
     echo "==> [Gateway Entrypoint] Performing database clean reset & schema deployment..."
-    npx prisma db push --force-reset --schema="$SCHEMA_PATH" --accept-data-loss || \
-    npx prisma db push --schema="$SCHEMA_PATH" --accept-data-loss || true
+    prisma db push --force-reset --schema="$SCHEMA_PATH" --accept-data-loss || \
+    /app/node_modules/.bin/prisma db push --force-reset --schema="$SCHEMA_PATH" --accept-data-loss || \
+    npx --yes prisma db push --force-reset --schema="$SCHEMA_PATH" --accept-data-loss || true
     echo "==> [Gateway Entrypoint] Database schema push completed."
   fi
 fi
