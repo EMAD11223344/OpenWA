@@ -13,13 +13,14 @@ if command -v redis-server >/dev/null 2>&1; then
   fi
 fi
 
-# 2. Map DATABASE_CONNECTION_URI to DATABASE_URL if present
+# 2. Map DATABASE_CONNECTION_URI to DATABASE_URL and DIRECT_URL
 if [ -n "$DATABASE_CONNECTION_URI" ]; then
   echo "==> [Gateway Entrypoint] Mapping DATABASE_CONNECTION_URI to DATABASE_URL..."
   export DATABASE_URL="$DATABASE_CONNECTION_URI"
+  export DIRECT_URL="$DATABASE_CONNECTION_URI"
 fi
 
-# 3. Synchronize Prisma Database Schema (Clean Wipe & Fresh Push)
+# 3. Synchronize Prisma Database Schema with explicit --url flag
 if [ -n "$DATABASE_URL" ]; then
   echo "==> [Gateway Entrypoint] Locating source Prisma schema in container..."
   SCHEMA_PATH=$(find /app -name "schema.prisma" 2>/dev/null | grep -v ".prisma/client" | head -n 1)
@@ -30,9 +31,9 @@ if [ -n "$DATABASE_URL" ]; then
   echo "==> [Gateway Entrypoint] Using Prisma schema: $SCHEMA_PATH"
   if [ -n "$SCHEMA_PATH" ]; then
     echo "==> [Gateway Entrypoint] Performing database clean reset & schema deployment..."
-    prisma db push --force-reset --schema="$SCHEMA_PATH" --accept-data-loss || \
-    /app/node_modules/.bin/prisma db push --force-reset --schema="$SCHEMA_PATH" --accept-data-loss || \
-    npx --yes prisma db push --force-reset --schema="$SCHEMA_PATH" --accept-data-loss || true
+    prisma db push --url "$DATABASE_URL" --force-reset --schema="$SCHEMA_PATH" --accept-data-loss || \
+    npx --yes prisma db push --url "$DATABASE_URL" --force-reset --schema="$SCHEMA_PATH" --accept-data-loss || \
+    prisma db push --force-reset --schema="$SCHEMA_PATH" --accept-data-loss || true
     echo "==> [Gateway Entrypoint] Database schema push completed."
   fi
 fi
