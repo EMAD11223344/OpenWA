@@ -40,13 +40,7 @@ if [ -n "$DATABASE_URL" ]; then
   fi
 fi
 
-# 5. Apply Puppeteer & whatsapp-web.js high-speed patches
-if [ -f "/app/patch_engine.js" ]; then
-  echo "==> [Gateway Entrypoint] Applying Chromium & Puppeteer engine patches..."
-  node /app/patch_engine.js || true
-fi
-
-# 6. Start MultiWA Gateway API in resilient watchdog loop on internal port 3333
+# 5. Start MultiWA Gateway API in resilient watchdog loop on internal port 3333
 export PORT=3333
 export API_PORT=3333
 export API_HOST=0.0.0.0
@@ -83,7 +77,7 @@ start_backend_watchdog() {
 
 start_backend_watchdog &
 
-# 7. Start Gateway Proxy & Dashboard on Port 7860 in foreground
+# 6. Start Gateway Proxy & Dashboard on Port 7860 in foreground
 echo "==> [Gateway Entrypoint] Starting MultiWA Dashboard & Gateway Proxy on port 7860..."
 export PORT=7860
 export TARGET_PORT=3333

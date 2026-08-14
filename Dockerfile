@@ -34,10 +34,9 @@ ENV ENCRYPTION_KEY=c025199d816db2613ca48c1efaef8e61b69aa155a26067e9747d98fccf31d
 RUN mkdir -p /data/sessions /app/sessions /app/storage /app/uploads /app/dashboard && \
     chmod -R 777 /data /app 2>/dev/null || true
 
-# Copy dashboard SPA, gateway proxy, and engine patcher
+# Copy dashboard SPA and gateway proxy
 COPY dashboard /app/dashboard
 COPY proxy.js /app/proxy.js
-COPY patch_engine.js /app/patch_engine.js
 
 # Copy custom entrypoint wrapper
 COPY entrypoint.sh /app/entrypoint.sh
