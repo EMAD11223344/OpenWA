@@ -19,7 +19,14 @@ if [ -z "$DATABASE_URL" ] && [ -n "$DATABASE_CONNECTION_URI" ]; then
   export DATABASE_URL="$DATABASE_CONNECTION_URI"
 fi
 
-# 3. Start MultiWA Gateway API process
+# 3. Synchronize Prisma Database Schema (Create missing tables)
+if [ -n "$DATABASE_URL" ]; then
+  echo "==> [Gateway Entrypoint] Synchronizing database tables with Prisma schema..."
+  cd /app 2>/dev/null || true
+  npx prisma db push --schema=packages/database/prisma/schema.prisma --accept-data-loss || true
+fi
+
+# 4. Start MultiWA Gateway API process
 echo "==> [Gateway Entrypoint] Starting Multi-Adapter API Gateway..."
 
 if [ -f "/docker/entrypoint-api.sh" ]; then
