@@ -47,6 +47,11 @@ export API_HOST=0.0.0.0
 export DEFAULT_ENGINE=whatsapp-web-js
 export CHROMIUM_PATH=/usr/bin/chromium
 export PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+export PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+export PUPPETEER_TIMEOUT=120000
+export NAVIGATION_TIMEOUT=120000
+export WHATSAPP_TIMEOUT=120000
+export QR_TIMEOUT=120000
 export PUPPETEER_ARGS="--no-sandbox,--disable-setuid-sandbox,--disable-dev-shm-usage,--disable-gpu,--no-first-run,--no-zygote,--single-process,--disable-extensions,--disable-default-apps,--dns-result-order=ipv4first"
 export CHROMIUM_FLAGS="--no-sandbox --disable-setuid-sandbox --disable-dev-shm-usage --disable-gpu --no-first-run --no-zygote --single-process --dns-result-order=ipv4first"
 

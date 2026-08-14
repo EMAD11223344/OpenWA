@@ -5,7 +5,7 @@ USER root
 
 # Install system dependencies (Redis for message queues, Chromium for real-browser adapter, and Prisma CLI globally)
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends redis-server chromium bash curl && \
+    apt-get install -y --no-install-recommends redis-server chromium bash curl fonts-liberation libnss3 libatk-bridge2.0-0 libdrm2 libxkbcommon0 libgbm1 libasound2 && \
     npm install -g prisma && \
     rm -rf /var/lib/apt/lists/*
 
@@ -23,6 +23,7 @@ ENV DEFAULT_ENGINE=whatsapp-web-js
 ENV CHROMIUM_PATH=/usr/bin/chromium
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+ENV PUPPETEER_TIMEOUT=120000
 
 # Security Secrets
 ENV JWT_SECRET=c025199d816db2613ca48c1efaef8e61b69aa155a26067e9747d98fccf31d2b7
